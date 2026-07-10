@@ -25,6 +25,7 @@ import { SPAWNS } from "../../shared/arena";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
 import type { EscrowService } from "./ton/EscrowService";
+import type { Leaderboard } from "./Leaderboard";
 
 export interface Conn {
   id: string;
@@ -73,6 +74,7 @@ export class Room {
   private ended = false;
   private onClose: () => void;
   private escrow: EscrowService;
+  private leaderboard: Leaderboard;
 
   constructor(
     id: string,
@@ -80,6 +82,7 @@ export class Room {
     stake: number,
     chainMatchId: bigint,
     escrow: EscrowService,
+    leaderboard: Leaderboard,
     onClose: () => void,
   ) {
     this.id = id;
@@ -89,6 +92,7 @@ export class Room {
     this.pot = +(stake * this.seats).toFixed(3);
     this.chainMatchId = chainMatchId;
     this.escrow = escrow;
+    this.leaderboard = leaderboard;
     this.onClose = onClose;
   }
 
@@ -295,6 +299,14 @@ export class Room {
         pot: this.pot,
         payout: youWon ? payout : 0,
       });
+
+      // Record humans on the weekly leaderboard. Net TON = payout − stake for
+      // the winner, −stake for everyone else.
+      if (p.conn) {
+        const tonDelta = youWon ? +(payout - this.stake).toFixed(3) : -this.stake;
+        const id = p.wallet ?? `name:${p.name}`;
+        this.leaderboard.record(id, p.name, tonDelta, youWon, p.player.score);
+      }
     }
 
     // Notify clients immediately (server result is authoritative), then settle

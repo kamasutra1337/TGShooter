@@ -8,3 +8,7 @@ dist/
 # Tact build output — regenerate with `cd contracts && npm run build`.
 # The server keeps a committed copy at server/src/ton/MatchEscrow.gen.ts.
 contracts/build/
+
+# Server runtime data (leaderboard store)
+server/data/
+server/test/.tmp-leaderboard.json

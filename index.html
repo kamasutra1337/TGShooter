@@ -76,10 +76,25 @@
           </div>
           <button id="btn-play" class="primary">PLAY · ONLINE</button>
           <button id="btn-practice" class="ghost wide">Practice vs bots (offline)</button>
+          <button id="btn-board" class="ghost wide">🏆 Weekly leaderboard</button>
           <p class="net-status" id="net-status"></p>
           <p class="hint" id="controls-hint"></p>
         </div>
       </div>
+      <!-- Weekly leaderboard overlay -->
+      <div id="leaderboard" class="hidden">
+        <div class="board-card">
+          <div class="board-head">
+            <h2>🏆 Weekly Leaderboard</h2>
+            <span id="board-week"></span>
+          </div>
+          <div id="board-body">
+            <p class="board-msg">Loading…</p>
+          </div>
+          <button id="btn-board-close" class="primary">CLOSE</button>
+        </div>
+      </div>
+
       <!-- Result overlay -->
       <div id="result" class="hidden">
         <div class="result-card">

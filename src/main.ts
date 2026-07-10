@@ -165,6 +165,73 @@ btnPractice.addEventListener("click", () => {
   game.startMatch({ mode, stake }, (win, payout) => showResult(win, payout));
 });
 
+// ---- weekly leaderboard ----
+interface LbEntry {
+  id: string;
+  name: string;
+  ton: number;
+  wins: number;
+  games: number;
+  kills: number;
+}
+
+const SERVER_HTTP = SERVER_URL.replace(/^ws/, "http");
+const btnBoard = document.getElementById("btn-board") as HTMLButtonElement;
+const boardOverlay = document.getElementById("leaderboard")!;
+const boardBody = document.getElementById("board-body")!;
+const boardWeek = document.getElementById("board-week")!;
+const btnBoardClose = document.getElementById("btn-board-close") as HTMLButtonElement;
+
+btnBoard.addEventListener("click", async () => {
+  boardOverlay.classList.remove("hidden");
+  boardWeek.textContent = "";
+  boardBody.innerHTML = `<p class="board-msg">Loading…</p>`;
+  try {
+    const res = await fetch(`${SERVER_HTTP}/leaderboard`, { cache: "no-store" });
+    renderBoard((await res.json()) as { week: string; entries: LbEntry[] });
+  } catch {
+    boardBody.innerHTML = `<p class="board-msg">Server unreachable — start the server to see the weekly board.</p>`;
+  }
+});
+btnBoardClose.addEventListener("click", () => boardOverlay.classList.add("hidden"));
+
+function renderBoard(data: { week: string; entries: LbEntry[] }): void {
+  boardWeek.textContent = data.week ?? "";
+  const entries = data.entries ?? [];
+  if (!entries.length) {
+    boardBody.innerHTML = `<p class="board-msg">No games yet this week — be the first, play a match!</p>`;
+    return;
+  }
+  const myName = Telegram.user()?.name ?? "Player";
+  const myId = Ton.getState().address ?? `name:${myName}`;
+  const rows = entries
+    .map((e, i) => {
+      const rank = i + 1;
+      const medal = rank <= 3 ? `g${rank}` : "";
+      const mine = e.id === myId || e.name === myName ? "me" : "";
+      const ton = (e.ton > 0 ? "+" : "") + e.ton;
+      return `<tr class="${mine}">
+        <td class="l"><span class="rank ${medal}">${rank}</span></td>
+        <td class="l">${escapeHtml(e.name)}</td>
+        <td class="ton">${ton}</td>
+        <td>${e.wins}</td>
+        <td>${e.kills}</td>
+      </tr>`;
+    })
+    .join("");
+  boardBody.innerHTML = `<table class="board">
+      <thead><tr><th class="l">#</th><th class="l">Player</th><th>TON</th><th>W</th><th>K</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
+  );
+}
+
 // result overlay
 const resultTitle = document.getElementById("result-title")!;
 const resultPayout = document.getElementById("result-payout")!;

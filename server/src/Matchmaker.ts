@@ -1,6 +1,7 @@
 import { Room, type Conn } from "./Room";
 import type { InputMsg, Mode } from "../../shared/protocol";
 import type { EscrowService } from "./ton/EscrowService";
+import type { Leaderboard } from "./Leaderboard";
 
 // Groups queued players into rooms by (mode, stake). A room starts as soon as it
 // has enough humans, or after a short wait it fills the remaining seats with
@@ -14,9 +15,11 @@ export class Matchmaker {
   private seq = 0;
   private chainSeq = 0n;
   private escrow: EscrowService;
+  private leaderboard: Leaderboard;
 
-  constructor(escrow: EscrowService) {
+  constructor(escrow: EscrowService, leaderboard: Leaderboard) {
     this.escrow = escrow;
+    this.leaderboard = leaderboard;
   }
 
   join(conn: Conn, mode: Mode, stake: number, name: string, wallet?: string): void {
@@ -24,7 +27,7 @@ export class Matchmaker {
     let room = this.pending.get(key);
     if (!room) {
       const chainMatchId = ++this.chainSeq;
-      room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, () => {
+      room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, this.leaderboard, () => {
         // room closed → drop routing entries
         for (const [id, r] of this.roomOf) if (r === room) this.roomOf.delete(id);
       });

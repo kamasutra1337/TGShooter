@@ -400,6 +400,109 @@ button {
   backdrop-filter: blur(6px);
 }
 
+/* Leaderboard overlay */
+#leaderboard {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 9, 14, 0.82);
+  backdrop-filter: blur(8px);
+}
+.board-card {
+  width: min(94%, 440px);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  border-radius: 18px;
+  background: rgba(18, 22, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.board-head h2 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+#board-week {
+  font-size: 12px;
+  color: var(--muted);
+}
+#board-body {
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+.board-msg {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 14px;
+}
+table.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+table.board th {
+  text-align: right;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 8px;
+  position: sticky;
+  top: 0;
+  background: rgba(18, 22, 32, 0.98);
+}
+table.board th.l,
+table.board td.l {
+  text-align: left;
+}
+table.board td {
+  text-align: right;
+  padding: 9px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+table.board td.ton {
+  color: var(--accent);
+  font-weight: 700;
+}
+table.board tr.me td {
+  background: rgba(55, 224, 166, 0.1);
+}
+.rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+.rank.g1 {
+  background: linear-gradient(135deg, #ffd166, #ff9f1c);
+  color: #1a1200;
+}
+.rank.g2 {
+  background: linear-gradient(135deg, #cfd8e3, #9aa7ba);
+  color: #10151d;
+}
+.rank.g3 {
+  background: linear-gradient(135deg, #e0955b, #b06c34);
+  color: #1a0f04;
+}
+
 /* Result overlay */
 #result {
   position: absolute;

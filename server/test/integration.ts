@@ -6,9 +6,11 @@ import { spawn } from "node:child_process";
 import { WebSocket } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { rmSync } from "node:fs";
 import type { ServerMsg, MatchStartMsg, InputMsg } from "../../shared/protocol";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const LB_FILE = join(__dirname, ".tmp-leaderboard.json");
 const PORT = 8099;
 const URL = `ws://localhost:${PORT}`;
 
@@ -19,10 +21,12 @@ function log(...a: unknown[]) {
 }
 
 async function main() {
+  rmSync(LB_FILE, { force: true }); // fresh leaderboard for the run
+
   // 1) boot server
   const server = spawn("npx", ["tsx", "src/index.ts"], {
     cwd: join(__dirname, ".."),
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), LEADERBOARD_FILE: LB_FILE },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));
@@ -94,7 +98,21 @@ async function main() {
   const timeout = sleep(30000).then(() => "timeout");
   const winner = await Promise.race([done.then(() => "done"), timeout]);
 
-  await sleep(200);
+  await sleep(700); // let the leaderboard flush
+
+  // Verify the weekly leaderboard recorded this match over HTTP.
+  let board: { week: string; entries: { name: string; ton: number; wins: number }[] } = {
+    week: "",
+    entries: [],
+  };
+  try {
+    const res = await fetch(`http://localhost:${PORT}/leaderboard`);
+    board = (await res.json()) as typeof board;
+    log(`leaderboard week=${board.week} entries=${board.entries.length}`);
+  } catch (e) {
+    log("leaderboard fetch failed", (e as Error).message);
+  }
+
   server.kill("SIGKILL");
 
   // 3) assertions
@@ -113,6 +131,11 @@ async function main() {
   if (totalSnaps < 10) problems.push(`expected snapshots to flow, got ${totalSnaps}`);
   const totalHits = stats.A.hitsDealt + stats.B.hitsDealt;
   if (totalHits < 5) problems.push(`expected authoritative hits, got ${totalHits}`);
+  if (board.entries.length < 2)
+    problems.push(`leaderboard should have both players, got ${board.entries.length}`);
+  const boardWinner = board.entries.find((e) => e.wins > 0);
+  if (!boardWinner || boardWinner.ton <= 0)
+    problems.push("leaderboard winner should have positive TON");
 
   log("stats", JSON.stringify(stats));
   if (problems.length) {

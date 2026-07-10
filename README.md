@@ -76,6 +76,7 @@ server/                authoritative game server (anti-cheat foundation)
   src/Matchmaker.ts    queue by (mode, stake) → rooms; bot-fill on timeout
   src/Room.ts          fixed-tick sim, lag-compensated hit reg, 20Hz snapshots, pot/win
   src/ServerBot.ts     bot brain — emits the same input a human would
+  src/Leaderboard.ts   weekly (ISO-week) board — net TON won, wins, kills; JSON-persisted
   src/ton/EscrowService.ts  settles the winner on-chain as the oracle (owner)
   src/ton/escrowMessages.ts build Deposit/Settle/Cancel bodies from the contract ABI
   test/integration.ts  boots server, fights two clients, asserts a winner + payout
@@ -127,8 +128,10 @@ you cannot let real TON touch a game the client can cheat.
    contract, set `ESCROW_ADDRESS`/`ORACLE_MNEMONIC` on the server + `VITE_ESCROW_ADDRESS`
    on the client, and swap the mock wallet for `@tonconnect/ui`
    (`public/tonconnect-manifest.json` is ready). Audit before mainnet.
-4. **Phase 4 — Meta & economy.** Jetton game token, NFT weapon/character skins,
-   inventory, marketplace, leaderboards, matchmaking/rooms.
+4. **Phase 4 — Meta & economy (started).** ✅ Weekly leaderboard (ISO-week, ranked
+   by net TON won, tie-broken by wins then kills; served at `GET /leaderboard`,
+   shown in the lobby). Next: Jetton game token, NFT weapon/character skins,
+   inventory, marketplace, matchmaking/rooms.
 5. **Phase 5 — Content & polish.** More maps, weapons, sounds, VFX, progression.
 
 ## Deploy as a Telegram Mini App
