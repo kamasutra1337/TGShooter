@@ -149,7 +149,12 @@ btnPlay.addEventListener("click", async () => {
       game.startOnline(mode, stake, net, start, (win, payout) => showResult(win, payout));
     },
   });
-  net.join(mode, stake, Telegram.user()?.name ?? "Player");
+  net.join(
+    mode,
+    stake,
+    Telegram.user()?.name ?? "Player",
+    Ton.getState().address ?? undefined,
+  );
 });
 
 // PRACTICE = offline vs local bots. No wallet, no stake — pure warm-up.

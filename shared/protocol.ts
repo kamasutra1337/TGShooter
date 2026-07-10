@@ -16,6 +16,7 @@ export interface JoinMsg {
   mode: Mode;
   stake: number;
   name: string;
+  wallet?: string; // player's TON address (for on-chain payout), if connected
 }
 
 export interface InputMsg {

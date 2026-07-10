@@ -4,3 +4,7 @@ dist/
 .DS_Store
 .env
 .env.local
+
+# Tact build output — regenerate with `cd contracts && npm run build`.
+# The server keeps a committed copy at server/src/ton/MatchEscrow.gen.ts.
+contracts/build/

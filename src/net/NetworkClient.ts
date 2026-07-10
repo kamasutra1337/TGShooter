@@ -98,8 +98,8 @@ export class NetworkClient {
     }
   }
 
-  join(mode: Mode, stake: number, name: string): void {
-    this.send({ t: "join", mode, stake, name });
+  join(mode: Mode, stake: number, name: string, wallet?: string): void {
+    this.send({ t: "join", mode, stake, name, wallet });
   }
 
   sendInput(i: Omit<InputMsg, "t" | "seq">): void {

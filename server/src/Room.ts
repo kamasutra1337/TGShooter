@@ -23,6 +23,8 @@ import {
 } from "../../shared/sim";
 import { SPAWNS } from "../../shared/arena";
 import { ServerBot } from "./ServerBot";
+import { Address } from "@ton/core";
+import type { EscrowService } from "./ton/EscrowService";
 
 export interface Conn {
   id: string;
@@ -32,6 +34,7 @@ export interface Conn {
 interface Part {
   player: SimPlayer;
   name: string;
+  wallet?: string; // TON address for on-chain payout
   conn: Conn | null; // null = bot
   bot: ServerBot | null;
   input: SimInput;
@@ -60,6 +63,7 @@ export class Room {
   readonly stake: number;
   readonly seats: number;
   readonly pot: number;
+  readonly chainMatchId: bigint; // on-chain escrow match id
 
   private parts: Part[] = [];
   private tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -68,13 +72,23 @@ export class Room {
   private elapsedMs = 0;
   private ended = false;
   private onClose: () => void;
+  private escrow: EscrowService;
 
-  constructor(id: string, mode: Mode, stake: number, onClose: () => void) {
+  constructor(
+    id: string,
+    mode: Mode,
+    stake: number,
+    chainMatchId: bigint,
+    escrow: EscrowService,
+    onClose: () => void,
+  ) {
     this.id = id;
     this.mode = mode;
     this.stake = stake;
     this.seats = SEATS[mode];
     this.pot = +(stake * this.seats).toFixed(3);
+    this.chainMatchId = chainMatchId;
+    this.escrow = escrow;
     this.onClose = onClose;
   }
 
@@ -85,12 +99,13 @@ export class Room {
     return this.parts.length >= this.seats;
   }
 
-  addHuman(conn: Conn, name: string): void {
+  addHuman(conn: Conn, name: string, wallet?: string): void {
     const seat = this.parts.length;
     const spawn = SPAWNS[seat % SPAWNS.length];
     this.parts.push({
       player: makePlayer(conn.id, spawn),
       name,
+      wallet,
       conn,
       bot: null,
       input: emptyInput(),
@@ -281,7 +296,26 @@ export class Room {
         payout: youWon ? payout : 0,
       });
     }
+
+    // Notify clients immediately (server result is authoritative), then settle
+    // the pot on-chain in the background — the escrow contract pays the winner.
+    if (winner && winner.wallet) {
+      this.settleOnChain(winner.wallet);
+    }
     this.dispose();
+  }
+
+  private settleOnChain(walletStr: string): void {
+    let addr: Address;
+    try {
+      addr = Address.parse(walletStr);
+    } catch {
+      console.warn(`[room ${this.id}] bad winner wallet, skipping settle`);
+      return;
+    }
+    this.escrow.settle(this.chainMatchId, addr).catch((e) => {
+      console.error(`[room ${this.id}] on-chain settle failed:`, e);
+    });
   }
 
   private rewind(p: Part, atMs: number): { x: number; y: number; z: number } {

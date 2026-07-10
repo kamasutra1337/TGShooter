@@ -1,17 +1,27 @@
 // TON wallet + match-escrow interface.
 //
-// This is the SEAM where real money will flow. Right now it is a mock so the
-// game loop is fully playable offline, but the shape matches what the real
-// implementation must provide, so wiring in @tonconnect/ui + an escrow smart
-// contract later touches ONLY this file.
+// This is the SEAM where real money flows. It is a mock today so the game is
+// fully playable in dev, but the shape matches production, so going live touches
+// ONLY this file.
 //
-// Real implementation plan (documented, not yet built):
-//   - Wallet:  @tonconnect/ui-react / TonConnect for connect + sign.
-//   - Escrow:  a match-escrow contract on TON. Each player sends `stake` to the
-//              contract for a matchId. The AUTHORITATIVE game server reports the
-//              winner (signed), and the contract releases the pot to the winner
-//              minus a rake. Funds can never move on client say-so — that is the
-//              anti-cheat boundary for wagers.
+// The other two thirds of the money loop already exist and are tested:
+//   - Contract: contracts/contracts/match_escrow.tact (deposit/settle/cancel,
+//     oracle-only settlement, pot payout minus rake) — sandbox-tested.
+//   - Settlement: the server's EscrowService settles the winner on-chain —
+//     sandbox-tested against the real contract.
+//
+// Remaining to go live (needs the user's keys / deployed contract):
+//   1. Deploy match_escrow with owner = the server's oracle wallet; set
+//      VITE_ESCROW_ADDRESS here and ESCROW_ADDRESS/ORACLE_MNEMONIC on the server.
+//   2. Replace the mock connect() below with @tonconnect/ui (manifest is at
+//      public/tonconnect-manifest.json — set its url/icon).
+//   3. Replace depositStake() with a TonConnect sendTransaction to the escrow
+//      address carrying a Deposit body (opcode from the contract ABI). The
+//      server then settles; funds never move on client say-so.
+
+// Escrow contract address (friendly form). Empty until deployed.
+export const ESCROW_ADDRESS =
+  (import.meta.env.VITE_ESCROW_ADDRESS as string | undefined) ?? "";
 
 export interface MatchStake {
   matchId: string;

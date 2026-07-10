@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/@tact-lang/compiler/dist/config/configSchema.json",
+  "projects": [
+    {
+      "name": "match_escrow",
+      "path": "./contracts/match_escrow.tact",
+      "output": "./build",
+      "options": {
+        "debug": true
+      }
+    }
+  ]
+}

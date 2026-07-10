@@ -8,12 +8,17 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx test/integration.ts"
+    "gen:copy": "cp ../contracts/build/match_escrow_MatchEscrow.ts src/ton/MatchEscrow.gen.ts",
+    "test": "tsx test/integration.ts",
+    "test:escrow": "tsx test/escrow.ts"
   },
   "dependencies": {
+    "@ton/core": "^0.60.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@ton/sandbox": "^0.24.0",
+    "@ton/test-utils": "^0.5.0",
     "@types/node": "^22.9.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.2",

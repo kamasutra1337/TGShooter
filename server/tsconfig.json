@@ -6,8 +6,9 @@
     "lib": ["ES2022"],
     "types": ["node"],
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    // Off because the generated Tact wrapper (contracts/build) trips them.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "noEmit": true

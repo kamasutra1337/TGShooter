@@ -1,5 +1,6 @@
 import { Room, type Conn } from "./Room";
 import type { InputMsg, Mode } from "../../shared/protocol";
+import type { EscrowService } from "./ton/EscrowService";
 
 // Groups queued players into rooms by (mode, stake). A room starts as soon as it
 // has enough humans, or after a short wait it fills the remaining seats with
@@ -11,12 +12,19 @@ export class Matchmaker {
   private roomOf = new Map<string, Room>(); // connId → room (routing)
   private fillTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private seq = 0;
+  private chainSeq = 0n;
+  private escrow: EscrowService;
 
-  join(conn: Conn, mode: Mode, stake: number, name: string): void {
+  constructor(escrow: EscrowService) {
+    this.escrow = escrow;
+  }
+
+  join(conn: Conn, mode: Mode, stake: number, name: string, wallet?: string): void {
     const key = `${mode}:${stake}`;
     let room = this.pending.get(key);
     if (!room) {
-      room = new Room("room-" + ++this.seq, mode, stake, () => {
+      const chainMatchId = ++this.chainSeq;
+      room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, () => {
         // room closed → drop routing entries
         for (const [id, r] of this.roomOf) if (r === room) this.roomOf.delete(id);
       });
@@ -28,7 +36,7 @@ export class Matchmaker {
       );
     }
 
-    room.addHuman(conn, name);
+    room.addHuman(conn, name, wallet);
     this.roomOf.set(conn.id, room);
 
     if (room.full) this.startRoom(key);

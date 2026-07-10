@@ -32,7 +32,10 @@ room to 5 with bots. **Practice** needs no server.
 Production build: `npm run build && npm run preview`. Point the client at a
 deployed server with `VITE_SERVER_URL=wss://your-host` at build time.
 
-Run the server's authoritative-match test: `cd server && npm test`.
+Tests:
+- `cd server && npm test` — authoritative multiplayer match (2 clients → winner).
+- `cd server && npm run test:escrow` — server settles the winner on the real contract (sandbox).
+- `cd contracts && npm install && npm run build && npm test` — escrow contract suite.
 
 ## Controls
 
@@ -59,6 +62,10 @@ what the server simulates. No heavy engine, boots in a second, tight memory
 control (well under 500 MB), none of Unity WebGL's Telegram reload-loop issues.
 
 ```
+contracts/             TON smart contracts (Tact)
+  contracts/match_escrow.tact  deposit / oracle-settle / cancel-refund / rake
+  tests/escrow.spec.ts         @ton/sandbox suite (money-safety invariants)
+
 shared/                deterministic core — identical in browser and Node
   protocol.ts          wire messages + tick/snapshot constants
   arena.ts             box geometry (single source of truth) + collision + ray-vs-AABB
@@ -69,7 +76,10 @@ server/                authoritative game server (anti-cheat foundation)
   src/Matchmaker.ts    queue by (mode, stake) → rooms; bot-fill on timeout
   src/Room.ts          fixed-tick sim, lag-compensated hit reg, 20Hz snapshots, pot/win
   src/ServerBot.ts     bot brain — emits the same input a human would
+  src/ton/EscrowService.ts  settles the winner on-chain as the oracle (owner)
+  src/ton/escrowMessages.ts build Deposit/Settle/Cancel bodies from the contract ABI
   test/integration.ts  boots server, fights two clients, asserts a winner + payout
+  test/escrow.ts       settles a match on the real contract in a sandbox
 
 src/                   client
   main.ts              lobby · wallet · online/practice launch · result screen
@@ -109,10 +119,14 @@ you cannot let real TON touch a game the client can cheat.
    state, hit registration (lag-compensated), and results at 30Hz sim / 20Hz
    snapshots. Clients predict + render. Bot-fill so solo players never wait.
    This is the anti-cheat foundation — *required before real money*.
-3. **Phase 3 — TON on-chain.** Real TonConnect wallet; a match-escrow contract
-   (FunC/Tact): each seat deposits `stake` for a `matchId`; the authoritative
-   server submits a signed result; the contract releases the pot to the winner
-   minus rake. Audited before mainnet.
+3. **◑ Phase 3 — TON on-chain (contract + settlement done, live wiring pending).**
+   `contracts/` holds the Tact **match-escrow** contract (deposit / oracle-only
+   settle / cancel-with-refunds / rake), proven by a 6-case sandbox suite. The
+   server's `EscrowService` settles the winner on-chain, proven against the real
+   compiled contract in the sandbox. **Remaining (needs your keys):** deploy the
+   contract, set `ESCROW_ADDRESS`/`ORACLE_MNEMONIC` on the server + `VITE_ESCROW_ADDRESS`
+   on the client, and swap the mock wallet for `@tonconnect/ui`
+   (`public/tonconnect-manifest.json` is ready). Audit before mainnet.
 4. **Phase 4 — Meta & economy.** Jetton game token, NFT weapon/character skins,
    inventory, marketplace, leaderboards, matchmaking/rooms.
 5. **Phase 5 — Content & polish.** More maps, weapons, sounds, VFX, progression.
