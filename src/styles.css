@@ -343,6 +343,22 @@ button {
   line-height: 1.5;
 }
 
+.ghost.wide {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.net-status {
+  margin-top: 12px;
+  font-size: 12px;
+  min-height: 16px;
+  color: var(--accent-2);
+}
+.net-status.err {
+  color: var(--danger);
+}
+
 /* Mode select chips */
 #mode-row {
   display: flex;

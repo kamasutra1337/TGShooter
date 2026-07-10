@@ -3,23 +3,36 @@
 A mobile-first first-person shooter for Telegram Mini Apps with a **wager-based**
 PvP economy on TON. Players stake TON into a match pot; the winner takes the pot.
 
-> **Status: playable vertical slice (offline vs bots).** The core loop — move,
-> aim, shoot, win a match, see the pot — is real and runs at 60 FPS in the
-> browser and inside Telegram. Networked multiplayer and the on-chain escrow are
-> the next phases (see Roadmap). Wagering is behind a mock wallet today; no real
-> TON moves yet.
+> **Status: Phase 2 — authoritative multiplayer.** Two ways to play:
+> **PLAY ONLINE** runs a real match on an authoritative Node server (the wager
+> path — the server owns movement, hit registration, and the result), and
+> **Practice** runs offline vs local bots. Both render at 60 FPS in the browser
+> and inside Telegram. Wagering is still behind a mock wallet + mock escrow; no
+> real TON moves until Phase 3 (audited on-chain escrow). See Roadmap.
 
 ## Run it
 
+Two processes: the static client and the game server.
+
 ```bash
+# 1) client
 npm install
-npm run dev      # http://localhost:5173
-# or a production build:
-npm run build && npm run preview
+npm run dev            # http://localhost:5173
+
+# 2) authoritative server (separate terminal)
+cd server
+npm install
+npm run dev            # ws://localhost:8090
 ```
 
-Open in a desktop browser to play with mouse + keyboard, or on a phone for the
-touch controls. Inside Telegram it runs as a Mini App (see Deploy).
+Then open the client, pick a mode + stake, and hit **PLAY ONLINE**. A duel fills
+with a bot after a few seconds if no human opponent joins; elimination fills the
+room to 5 with bots. **Practice** needs no server.
+
+Production build: `npm run build && npm run preview`. Point the client at a
+deployed server with `VITE_SERVER_URL=wss://your-host` at build time.
+
+Run the server's authoritative-match test: `cd server && npm test`.
 
 ## Controls
 
@@ -40,19 +53,34 @@ in the lobby and on the in-match HUD banner.
 
 ## Architecture
 
-Plain **TypeScript + Three.js + Vite** — no heavy engine, boots in a second,
-tight control over memory (well under the 500 MB target), and none of Unity
-WebGL's reload-loop issues inside the Telegram in-app browser.
+Plain **TypeScript + Three.js + Vite** on the client, **Node + ws** on the
+server, and a **shared deterministic core** both run — so what you see equals
+what the server simulates. No heavy engine, boots in a second, tight memory
+control (well under 500 MB), none of Unity WebGL's Telegram reload-loop issues.
 
 ```
-src/
-  main.ts              bootstrap · lobby wiring · wallet · result screen
+shared/                deterministic core — identical in browser and Node
+  protocol.ts          wire messages + tick/snapshot constants
+  arena.ts             box geometry (single source of truth) + collision + ray-vs-AABB
+  sim.ts               movement, weapon, authoritative hitscan (ray-vs-capsule)
+
+server/                authoritative game server (anti-cheat foundation)
+  src/index.ts         WebSocket endpoint
+  src/Matchmaker.ts    queue by (mode, stake) → rooms; bot-fill on timeout
+  src/Room.ts          fixed-tick sim, lag-compensated hit reg, 20Hz snapshots, pot/win
+  src/ServerBot.ts     bot brain — emits the same input a human would
+  test/integration.ts  boots server, fights two clients, asserts a winner + payout
+
+src/                   client
+  main.ts              lobby · wallet · online/practice launch · result screen
+  net/NetworkClient.ts WS transport: connect, join, stream input, receive snapshots
   game/
-    Game.ts            renderer, scene, lights, match lifecycle, main loop
-    Player.ts          FPS controller (Source-style accel, gravity, jump)
-    Weapon.ts          hitscan rifle, recoil, ammo/reload, tracers, muzzle flash
-    Bot.ts             enemy AI (wander → chase → shoot), head/body hitboxes
-    Arena.ts           map geometry, AABB colliders, spawns, collision resolution
+    Game.ts            renderer/scene; offline match loop + online server-driven loop
+    Player.ts          FPS controller (Source-style); client prediction + reconcile
+    RemoteAvatar.ts    other players, interpolated from server snapshots
+    Weapon.ts          hitscan visuals (tracers, muzzle flash); offline hit logic
+    Bot.ts             offline practice AI
+    Arena.ts           renders the shared box list; delegates collision to shared
     Input.ts           unified keyboard+mouse (pointer lock) / twin-stick touch
     HUD.ts             health, ammo, score, pot, hitmarker (DOM, change-gated)
   platform/
@@ -60,10 +88,15 @@ src/
     ton.ts             wallet + match-escrow interface (MOCK — the money seam)
 ```
 
-**Key boundary — `platform/ton.ts`.** This is the single seam where real money
-will flow. It is a mock today so the game is fully playable offline, but its
-shape matches the real implementation, so wiring in TonConnect + an escrow smart
-contract later touches *only that file*.
+**Anti-cheat boundary.** Online, the client only sends input and renders
+snapshots; the server owns positions, hit registration (lag-compensated), and
+the result. A client cannot fabricate a kill or a win.
+
+**Money seam — `platform/ton.ts` + `server/src/Room.ts`.** The mock wallet/escrow
+is client-side; the authoritative result the escrow will trust is produced by
+`Room`. Phase 3 wires TonConnect + an audited escrow contract: each seat deposits
+to the contract, the server submits a signed result, the contract pays the
+winner. Funds never move on client say-so.
 
 ## Roadmap
 
@@ -72,9 +105,10 @@ you cannot let real TON touch a game the client can cheat.
 
 1. **✅ Phase 1 — Core FPS (this slice).** Controller, shooting feel, arena,
    bots, HUD, both match modes, mock wallet/escrow. Playable offline.
-2. **Phase 2 — Authoritative multiplayer.** Node + WebSocket server owns game
-   state, hit registration, and lag compensation. Clients become renderers +
-   input. This is the anti-cheat foundation — *required before real money*.
+2. **✅ Phase 2 — Authoritative multiplayer.** Node + WebSocket server owns game
+   state, hit registration (lag-compensated), and results at 30Hz sim / 20Hz
+   snapshots. Clients predict + render. Bot-fill so solo players never wait.
+   This is the anti-cheat foundation — *required before real money*.
 3. **Phase 3 — TON on-chain.** Real TonConnect wallet; a match-escrow contract
    (FunC/Tact): each seat deposits `stake` for a `matchId`; the authoritative
    server submits a signed result; the contract releases the pot to the winner

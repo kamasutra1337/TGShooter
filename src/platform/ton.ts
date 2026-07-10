@@ -77,6 +77,14 @@ class TonServiceImpl {
     return { ok: true };
   }
 
+  // MOCK refund. Real: if a room fails to fill/fund, the escrow contract returns
+  // each player's stake. Here we just credit the mock balance back.
+  async refundStake(stake: number): Promise<void> {
+    if (!this.state.connected) return;
+    this.state = { ...this.state, balance: this.state.balance + stake };
+    this.emit();
+  }
+
   // MOCK payout. Real: the escrow contract releases the pot to the winner after
   // the authoritative server submits a signed result. Client never moves funds.
   async claimPayout(m: MatchStake, rake = 0.05): Promise<number> {

@@ -149,6 +149,16 @@ export class Weapon {
     return null;
   }
 
+  // Public hooks for networked mode: draw a tracer / muzzle flash from
+  // server-reported shot events (accurate impact points).
+  showTracer(from: THREE.Vector3, to: THREE.Vector3): void {
+    this.spawnTracer(from, to);
+  }
+  flashAt(origin: THREE.Vector3): void {
+    this.flash.position.copy(origin);
+    this.flash.intensity = 6;
+  }
+
   private spawnTracer(from: THREE.Vector3, to: THREE.Vector3): void {
     const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
     const line = new THREE.Line(geo, this.tracerMat.clone());

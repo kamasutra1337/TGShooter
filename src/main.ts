@@ -2,6 +2,14 @@ import "./styles.css";
 import { Game, type Mode } from "./game/Game";
 import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
+import { NetworkClient } from "./net/NetworkClient";
+
+// Authoritative server URL. Override with VITE_SERVER_URL for production
+// (wss://your-host). Defaults to the current host on the dev port so a phone on
+// the same LAN can reach the dev server too.
+const SERVER_URL =
+  (import.meta.env.VITE_SERVER_URL as string | undefined) ??
+  `ws://${location.hostname || "localhost"}:8090`;
 
 Telegram.init();
 
@@ -37,6 +45,8 @@ const controlsHint = document.getElementById("controls-hint")!;
 const walletStatus = document.getElementById("wallet-status")!;
 const btnWallet = document.getElementById("btn-wallet") as HTMLButtonElement;
 const btnPlay = document.getElementById("btn-play") as HTMLButtonElement;
+const btnPractice = document.getElementById("btn-practice") as HTMLButtonElement;
+const netStatus = document.getElementById("net-status")!;
 const stakeSelect = document.getElementById("stake-select") as HTMLSelectElement;
 const modeChips = Array.from(
   document.querySelectorAll<HTMLButtonElement>(".mode-chip"),
@@ -62,7 +72,17 @@ function updatePlayLabel(): void {
   const stake = parseFloat(stakeSelect.value);
   const seats = mode === "duel" ? 2 : 5;
   const pot = +(stake * seats).toFixed(3);
-  btnPlay.textContent = `PLAY · POT ${pot} TON`;
+  btnPlay.textContent = `PLAY ONLINE · POT ${pot} TON`;
+}
+
+function setNet(text: string, err = false): void {
+  netStatus.textContent = text;
+  netStatus.classList.toggle("err", err);
+}
+
+function enterMatch(): void {
+  menu.classList.add("hidden");
+  if (game.usingTouch) touch.classList.remove("hidden");
 }
 stakeSelect.addEventListener("change", updatePlayLabel);
 updatePlayLabel();
@@ -87,34 +107,57 @@ btnWallet.addEventListener("click", async () => {
   }
 });
 
-// play
+// PLAY = online, authoritative-server match (the wager path).
 btnPlay.addEventListener("click", async () => {
   const stake = parseFloat(stakeSelect.value);
   const seats = mode === "duel" ? 2 : 5;
   const pot = +(stake * seats).toFixed(3);
 
-  // Wager gate: if a wallet is connected, take the stake into escrow (mock).
-  // Without a wallet we let the user play a "free" match so the game is always
-  // demoable — real production would require a funded room before start.
+  // Wager gate: with a wallet connected, take the stake into escrow (mock).
+  // Without one, a free match is allowed so the game is always demoable —
+  // production would require a funded room before start.
   if (Ton.getState().connected) {
-    const dep = await Ton.depositStake({
-      matchId: "local",
-      stake,
-      players: seats,
-      pot,
-    });
+    const dep = await Ton.depositStake({ matchId: "online", stake, players: seats, pot });
     if (!dep.ok) {
-      walletStatus.textContent = "Insufficient balance for stake";
+      setNet("Insufficient balance for stake", true);
       return;
     }
   }
 
-  menu.classList.add("hidden");
-  if (game.usingTouch) touch.classList.remove("hidden");
+  btnPlay.disabled = true;
+  setNet("Connecting to server…");
+  const net = new NetworkClient();
+  try {
+    await net.connect(SERVER_URL);
+  } catch {
+    btnPlay.disabled = false;
+    if (Ton.getState().connected) await Ton.refundStake(stake);
+    setNet("Can't reach the game server. Start it (server/ → npm run dev) or use Practice.", true);
+    return;
+  }
 
-  game.startMatch({ mode, stake }, (win, payout) => {
-    showResult(win, payout);
+  setNet(
+    mode === "duel"
+      ? "Matchmaking… (a bot fills in if no opponent)"
+      : "Matchmaking 5 players… (bots fill empty seats)",
+  );
+  net.setHandlers({
+    onStart: (start) => {
+      btnPlay.disabled = false;
+      setNet("");
+      enterMatch();
+      game.startOnline(mode, stake, net, start, (win, payout) => showResult(win, payout));
+    },
   });
+  net.join(mode, stake, Telegram.user()?.name ?? "Player");
+});
+
+// PRACTICE = offline vs local bots. No wallet, no stake — pure warm-up.
+btnPractice.addEventListener("click", () => {
+  const stake = parseFloat(stakeSelect.value);
+  setNet("");
+  enterMatch();
+  game.startMatch({ mode, stake }, (win, payout) => showResult(win, payout));
 });
 
 // result overlay
@@ -138,5 +181,7 @@ function showResult(win: boolean, payout: number): void {
 btnAgain.addEventListener("click", () => {
   result.classList.add("hidden");
   menu.classList.remove("hidden");
+  btnPlay.disabled = false;
+  setNet("");
   game.stopMatch();
 });

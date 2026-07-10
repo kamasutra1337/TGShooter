@@ -45,6 +45,14 @@ export class Player {
     this.syncCamera();
   }
 
+  // Snap the eye to an authoritative position (server reconciliation / respawn).
+  // Keeps current aim (yaw/pitch) — aim stays client-controlled.
+  teleport(eye: THREE.Vector3): void {
+    this.position.copy(eye);
+    this.velocity.set(0, 0, 0);
+    this.syncCamera();
+  }
+
   damage(amount: number): void {
     if (!this.alive) return;
     this.health -= amount;

@@ -5,10 +5,28 @@ import { Weapon } from "./Weapon";
 import { Bot } from "./Bot";
 import { HUD } from "./HUD";
 import { Input } from "./Input";
+import { RemoteAvatar } from "./RemoteAvatar";
 import { Telegram } from "../platform/telegram";
 import { Ton, type MatchStake } from "../platform/ton";
+import { NetworkClient } from "../net/NetworkClient";
+import type { MatchStartMsg, HitEventMsg, ShotEventMsg, SnapshotMsg } from "../../shared/protocol";
+import { SPAWNS } from "../../shared/arena";
+import { EYE } from "../../shared/sim";
 
 export type Mode = "duel" | "elimination";
+
+interface OnlineState {
+  mode: Mode;
+  pot: number;
+  stake: number;
+  youId: string;
+  running: boolean;
+  ammo: number;
+  fireCd: number;
+  avatars: Map<string, RemoteAvatar>;
+}
+
+const AVATAR_PALETTE = [0xff5a6a, 0xffa23a, 0x9b6cff, 0x3ad0ff, 0xff6ac0];
 
 export interface MatchConfig {
   mode: Mode;
@@ -41,6 +59,8 @@ export class Game {
   private match: MatchState | null = null;
   private respawnQueue: { bot: Bot; t: number }[] = [];
   private onEnd: (win: boolean, payout: number) => void = () => {};
+  private online: OnlineState | null = null;
+  private net: NetworkClient | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -155,6 +175,7 @@ export class Game {
 
   stopMatch(): void {
     if (this.match) this.match.running = false;
+    if (this.online) this.cleanupOnline();
     this.hud.hide();
   }
 
@@ -169,6 +190,15 @@ export class Game {
 
   private frame(): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    if (this.online?.running) this.onlineFrame(dt);
+    else this.offlineFrame(dt);
+
+    this.hud.update(dt);
+    this.input.endFrame();
+    this.renderer.render(this.scene, this.player.camera);
+  }
+
+  private offlineFrame(dt: number): void {
     const m = this.match;
 
     if (m && m.running && this.player.alive) {
@@ -217,10 +247,6 @@ export class Game {
     } else {
       this.weapon.update(dt, this.arena.solids);
     }
-
-    this.hud.update(dt);
-    this.input.endFrame();
-    this.renderer.render(this.scene, this.player.camera);
   }
 
   private onBotDied(bot: Bot): void {
@@ -282,5 +308,181 @@ export class Game {
     }
     this.hud.hide();
     this.onEnd(win, payout);
+  }
+
+  // ---------------- online (authoritative server) ----------------
+  startOnline(
+    mode: Mode,
+    stake: number,
+    net: NetworkClient,
+    start: MatchStartMsg,
+    onEnd: (win: boolean, payout: number) => void,
+  ): void {
+    this.onEnd = onEnd;
+    this.net = net;
+    this.match = null;
+
+    // clear any offline bots
+    for (const b of this.bots) this.scene.remove(b.root);
+    this.bots = [];
+
+    const youId = start.youId;
+    const seat = Math.max(
+      0,
+      start.players.findIndex((p) => p.id === youId),
+    );
+    const feet = SPAWNS[seat % SPAWNS.length];
+    this.player.reset(
+      new THREE.Vector3(feet[0], feet[1] + EYE, feet[2]),
+      seat === 0 ? 0 : Math.PI,
+    );
+
+    const avatars = new Map<string, RemoteAvatar>();
+    start.players.forEach((p, i) => {
+      if (p.id === youId) return;
+      const av = new RemoteAvatar(AVATAR_PALETTE[i % AVATAR_PALETTE.length]);
+      this.scene.add(av.root);
+      avatars.set(p.id, av);
+    });
+
+    this.online = {
+      mode,
+      pot: start.pot,
+      stake,
+      youId,
+      running: true,
+      ammo: this.weapon.magSize,
+      fireCd: 0,
+      avatars,
+    };
+
+    net.setHandlers({
+      onSnapshot: (m) => this.onSnapshot(m),
+      onHit: (m) => this.onHit(m),
+      onShot: (m) => this.onShot(m),
+      onEnd: (m) => void this.onNetEnd(m.youWon, m.payout),
+      onClose: () => {
+        if (this.online?.running) void this.onNetEnd(false, 0);
+      },
+    });
+
+    this.hud.show();
+    this.hud.setHealth(100);
+    this.hud.setAmmo(this.weapon.magSize, 90);
+    this.hud.setScore(0);
+    this.hud.setPot(start.pot, mode === "duel" ? "1v1" : "BATTLE");
+    this.clock.getDelta();
+  }
+
+  private onlineFrame(dt: number): void {
+    const o = this.online!;
+    if (this.player.alive) this.player.update(dt, this.input.state, this.arena);
+
+    // tracer / muzzle-flash decay
+    this.weapon.update(dt, this.arena.solids);
+
+    // local muzzle-flash cadence (cosmetic; server owns real fire + hits)
+    o.fireCd -= dt;
+    if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0 && this.player.alive) {
+      o.fireCd = 1 / this.weapon.fireRate;
+      const origin = this.player.camera.position
+        .clone()
+        .addScaledVector(this.player.forwardVector(), 0.6);
+      this.weapon.flashAt(origin);
+      Telegram.haptic("light");
+    }
+
+    // stream input to the authoritative server
+    this.net?.sendInput({
+      moveX: this.input.state.moveX,
+      moveY: this.input.state.moveY,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch,
+      fire: this.input.state.firing,
+      jump: this.input.state.jumpQueued,
+      reload: this.input.state.reloadQueued,
+    });
+
+    for (const av of o.avatars.values()) av.update(dt);
+  }
+
+  private onSnapshot(m: SnapshotMsg): void {
+    const o = this.online;
+    if (!o || !o.running) return;
+    for (const s of m.players) {
+      if (s.id === o.youId) {
+        o.ammo = s.ammo;
+        this.hud.setHealth(s.health);
+        this.hud.setAmmo(s.ammo, s.reserve);
+        this.hud.setScore(s.score);
+        const serverEye = new THREE.Vector3(s.x, s.y, s.z);
+        const wasAlive = this.player.alive;
+        this.player.health = s.health;
+        this.player.alive = s.alive;
+        // Reconcile: trust client prediction unless it diverges, or on respawn.
+        if (!s.alive) this.player.teleport(serverEye);
+        else if (!wasAlive || this.player.position.distanceTo(serverEye) > 2)
+          this.player.teleport(serverEye);
+      } else {
+        let av = o.avatars.get(s.id);
+        if (!av) {
+          av = new RemoteAvatar(AVATAR_PALETTE[o.avatars.size % AVATAR_PALETTE.length]);
+          this.scene.add(av.root);
+          o.avatars.set(s.id, av);
+        }
+        av.setTarget(s.x, s.y, s.z, s.yaw, s.alive);
+      }
+    }
+  }
+
+  private onHit(m: HitEventMsg): void {
+    const o = this.online;
+    if (!o) return;
+    if (m.by === o.youId) {
+      this.hud.hitMarker(m.headshot);
+      Telegram.haptic("light");
+    }
+    if (m.target === o.youId) {
+      this.hud.damageFlashPulse();
+      Telegram.haptic("heavy");
+    }
+  }
+
+  private onShot(m: ShotEventMsg): void {
+    const o = this.online;
+    if (!o) return;
+    const from = new THREE.Vector3(m.ox, m.oy, m.oz);
+    const to = new THREE.Vector3(m.hx, m.hy, m.hz);
+    this.weapon.showTracer(from, to);
+    if (m.by !== o.youId) this.weapon.flashAt(from);
+  }
+
+  private async onNetEnd(youWon: boolean, payout: number): Promise<void> {
+    const o = this.online;
+    if (!o || !o.running) return;
+    o.running = false;
+    Telegram.notify(youWon ? "success" : "error");
+    let pay = payout;
+    if (youWon && Ton.getState().connected) {
+      pay = await Ton.claimPayout({
+        matchId: "online",
+        stake: o.stake,
+        players: o.mode === "duel" ? 2 : 5,
+        pot: o.pot,
+      });
+    }
+    this.cleanupOnline();
+    this.hud.hide();
+    this.onEnd(youWon, pay);
+  }
+
+  private cleanupOnline(): void {
+    if (this.online) {
+      for (const av of this.online.avatars.values()) av.dispose(this.scene);
+      this.online.avatars.clear();
+    }
+    this.net?.close();
+    this.net = null;
+    this.online = null;
   }
 }

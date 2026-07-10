@@ -1,0 +1,356 @@
+import {
+  TICK_DT,
+  TICK_HZ,
+  SNAPSHOT_HZ,
+  SEATS,
+  DUEL_TARGET,
+  RAKE,
+  type Mode,
+  type InputMsg,
+  type ServerMsg,
+  type PlayerSnap,
+} from "../../shared/protocol";
+import {
+  makePlayer,
+  respawn,
+  stepMovement,
+  stepWeapon,
+  doFire,
+  hitscan,
+  feetOf,
+  type SimInput,
+  type SimPlayer,
+} from "../../shared/sim";
+import { SPAWNS } from "../../shared/arena";
+import { ServerBot } from "./ServerBot";
+
+export interface Conn {
+  id: string;
+  send(msg: ServerMsg): void;
+}
+
+interface Part {
+  player: SimPlayer;
+  name: string;
+  conn: Conn | null; // null = bot
+  bot: ServerBot | null;
+  input: SimInput;
+  respawnT: number; // >0 while waiting to respawn (duel)
+  history: { t: number; x: number; y: number; z: number }[]; // feet, for lag comp
+}
+
+const emptyInput = (): SimInput => ({
+  moveX: 0,
+  moveY: 0,
+  yaw: 0,
+  pitch: 0,
+  fire: false,
+  jump: false,
+  reload: false,
+});
+
+// Fixed lag-compensation window for human shooters (~one interp buffer).
+// Production should use per-client measured RTT; this is a documented constant.
+const LAGCOMP_MS = 100;
+const HISTORY_MS = 1200;
+
+export class Room {
+  readonly id: string;
+  readonly mode: Mode;
+  readonly stake: number;
+  readonly seats: number;
+  readonly pot: number;
+
+  private parts: Part[] = [];
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private snapTimer: ReturnType<typeof setInterval> | null = null;
+  private tickN = 0;
+  private elapsedMs = 0;
+  private ended = false;
+  private onClose: () => void;
+
+  constructor(id: string, mode: Mode, stake: number, onClose: () => void) {
+    this.id = id;
+    this.mode = mode;
+    this.stake = stake;
+    this.seats = SEATS[mode];
+    this.pot = +(stake * this.seats).toFixed(3);
+    this.onClose = onClose;
+  }
+
+  get humanCount(): number {
+    return this.parts.filter((p) => p.conn).length;
+  }
+  get full(): boolean {
+    return this.parts.length >= this.seats;
+  }
+
+  addHuman(conn: Conn, name: string): void {
+    const seat = this.parts.length;
+    const spawn = SPAWNS[seat % SPAWNS.length];
+    this.parts.push({
+      player: makePlayer(conn.id, spawn),
+      name,
+      conn,
+      bot: null,
+      input: emptyInput(),
+      respawnT: 0,
+      history: [],
+    });
+  }
+
+  private addBot(): void {
+    const seat = this.parts.length;
+    const spawn = SPAWNS[seat % SPAWNS.length];
+    const id = "bot-" + seat;
+    this.parts.push({
+      player: makePlayer(id, spawn),
+      name: "Bot " + seat,
+      conn: null,
+      bot: new ServerBot(),
+      input: emptyInput(),
+      respawnT: 0,
+      history: [],
+    });
+  }
+
+  fillWithBots(): void {
+    while (this.parts.length < this.seats) this.addBot();
+  }
+
+  start(): void {
+    this.fillWithBots();
+    const roster = this.parts.map((p) => ({
+      id: p.player.id,
+      name: p.name,
+      bot: !p.conn,
+    }));
+    for (const p of this.parts) {
+      p.conn?.send({
+        t: "start",
+        mode: this.mode,
+        youId: p.player.id,
+        pot: this.pot,
+        stake: this.stake,
+        players: roster,
+      });
+    }
+    this.tickTimer = setInterval(() => this.tick(), 1000 / TICK_HZ);
+    this.snapTimer = setInterval(() => this.broadcastSnap(), 1000 / SNAPSHOT_HZ);
+  }
+
+  setInput(id: string, msg: InputMsg): void {
+    const p = this.parts.find((x) => x.player.id === id);
+    if (!p) return;
+    p.input = {
+      moveX: clamp(msg.moveX, -1, 1),
+      moveY: clamp(msg.moveY, -1, 1),
+      yaw: msg.yaw,
+      pitch: msg.pitch,
+      fire: msg.fire,
+      jump: msg.jump,
+      reload: msg.reload,
+    };
+    (p as Part & { ackSeq?: number }).ackSeq = msg.seq;
+  }
+
+  removeHuman(id: string): void {
+    const p = this.parts.find((x) => x.player.id === id);
+    if (!p) return;
+    p.conn = null;
+    p.player.alive = false; // treat as eliminated
+    this.checkWin();
+  }
+
+  private tick(): void {
+    if (this.ended) return;
+    const dt = TICK_DT;
+    this.tickN++;
+    this.elapsedMs += dt * 1000;
+
+    // 1) decide inputs (bots think), 2) move + weapon, 3) fire resolution
+    for (const p of this.parts) {
+      if (p.bot) p.input = p.bot.think(p.player, this.players(), dt);
+
+      // respawn countdown (duel)
+      if (!p.player.alive && p.respawnT > 0) {
+        p.respawnT -= dt;
+        if (p.respawnT <= 0) {
+          const seat = this.parts.indexOf(p);
+          respawn(p.player, SPAWNS[seat % SPAWNS.length]);
+        }
+      }
+
+      stepMovement(p.player, p.input, dt);
+      stepWeapon(p.player, p.input, dt);
+    }
+
+    // record history AFTER movement
+    for (const p of this.parts) {
+      const f = feetOf(p.player);
+      p.history.push({ t: this.elapsedMs, x: f.x, y: f.y, z: f.z });
+      const cutoff = this.elapsedMs - HISTORY_MS;
+      while (p.history.length > 2 && p.history[0].t < cutoff) p.history.shift();
+    }
+
+    // fire resolution with lag compensation
+    for (const shooter of this.parts) {
+      if (!shooter.input.fire) continue;
+      const shot = doFire(shooter.player, Math.random);
+      if (!shot) continue;
+
+      const compMs = shooter.conn ? LAGCOMP_MS : 0;
+      const targets = this.parts.map((p) => ({
+        id: p.player.id,
+        feet: this.rewind(p, this.elapsedMs - compMs),
+        alive: p.player.alive,
+      }));
+
+      const hit = hitscan(shot.origin, shot.dir, targets, shooter.player.id);
+      const impact = hit
+        ? hit.point
+        : {
+            x: shot.origin.x + shot.dir.x * 60,
+            y: shot.origin.y + shot.dir.y * 60,
+            z: shot.origin.z + shot.dir.z * 60,
+          };
+
+      this.broadcast({
+        t: "shot",
+        by: shooter.player.id,
+        ox: shot.origin.x,
+        oy: shot.origin.y,
+        oz: shot.origin.z,
+        hx: impact.x,
+        hy: impact.y,
+        hz: impact.z,
+      });
+
+      if (hit) {
+        const victim = this.parts.find((p) => p.player.id === hit.targetId)!;
+        const killed = this.applyDamage(shooter, victim, hit.damage);
+        this.broadcast({
+          t: "hit",
+          by: shooter.player.id,
+          target: victim.player.id,
+          headshot: hit.headshot,
+          damage: hit.damage,
+          killed,
+        });
+      }
+    }
+  }
+
+  private applyDamage(shooter: Part, victim: Part, dmg: number): boolean {
+    if (!victim.player.alive) return false;
+    victim.player.health -= dmg;
+    if (victim.player.health > 0) return false;
+
+    victim.player.health = 0;
+    victim.player.alive = false;
+    shooter.player.score++;
+
+    if (this.mode === "duel") {
+      victim.respawnT = 1.6;
+      if (shooter.player.score >= DUEL_TARGET) this.finish(shooter);
+    } else {
+      // elimination: one life, no respawn
+      this.checkWin();
+    }
+    return true;
+  }
+
+  private checkWin(): void {
+    if (this.ended) return;
+    if (this.mode !== "elimination") return;
+    const alive = this.parts.filter((p) => p.player.alive);
+    if (alive.length <= 1) this.finish(alive[0] ?? null);
+  }
+
+  private finish(winner: Part | null): void {
+    if (this.ended) return;
+    this.ended = true;
+    const payout = +(this.pot * (1 - RAKE)).toFixed(3);
+    for (const p of this.parts) {
+      const youWon = winner != null && p.player.id === winner.player.id;
+      p.conn?.send({
+        t: "end",
+        winnerId: winner ? winner.player.id : null,
+        youWon,
+        pot: this.pot,
+        payout: youWon ? payout : 0,
+      });
+    }
+    this.dispose();
+  }
+
+  private rewind(p: Part, atMs: number): { x: number; y: number; z: number } {
+    const h = p.history;
+    if (h.length === 0) return feetOf(p.player);
+    // find the two samples bracketing atMs and lerp
+    for (let i = h.length - 1; i >= 0; i--) {
+      if (h[i].t <= atMs) {
+        const a = h[i];
+        const b = h[Math.min(i + 1, h.length - 1)];
+        if (b.t === a.t) return { x: a.x, y: a.y, z: a.z };
+        const f = (atMs - a.t) / (b.t - a.t);
+        return {
+          x: a.x + (b.x - a.x) * f,
+          y: a.y + (b.y - a.y) * f,
+          z: a.z + (b.z - a.z) * f,
+        };
+      }
+    }
+    return { x: h[0].x, y: h[0].y, z: h[0].z };
+  }
+
+  private players(): SimPlayer[] {
+    return this.parts.map((p) => p.player);
+  }
+
+  private broadcastSnap(): void {
+    if (this.ended) return;
+    const players: PlayerSnap[] = this.parts.map((p) => ({
+      id: p.player.id,
+      x: p.player.pos.x,
+      y: p.player.pos.y,
+      z: p.player.pos.z,
+      yaw: p.player.yaw,
+      pitch: p.player.pitch,
+      health: p.player.health,
+      alive: p.player.alive,
+      score: p.player.score,
+      ammo: p.player.ammo,
+      reserve: p.player.reserve,
+    }));
+    for (const p of this.parts) {
+      p.conn?.send({
+        t: "snap",
+        tick: this.tickN,
+        ackSeq: (p as Part & { ackSeq?: number }).ackSeq ?? 0,
+        players,
+      });
+    }
+  }
+
+  private broadcast(msg: ServerMsg): void {
+    for (const p of this.parts) p.conn?.send(msg);
+  }
+
+  private dispose(): void {
+    if (this.tickTimer) clearInterval(this.tickTimer);
+    if (this.snapTimer) clearInterval(this.snapTimer);
+    this.tickTimer = null;
+    this.snapTimer = null;
+    this.onClose();
+  }
+
+  forceClose(): void {
+    this.ended = true;
+    this.dispose();
+  }
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
