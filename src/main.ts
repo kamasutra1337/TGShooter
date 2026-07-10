@@ -21,6 +21,9 @@ let game: Game;
 try {
   game = new Game(canvas);
   game.start();
+  // Debug handle for headless verification only (opt-in via ?debug).
+  if (new URLSearchParams(location.search).has("debug"))
+    (window as unknown as { __game: Game }).__game = game;
 } catch (err) {
   document.body.innerHTML = `
     <div style="position:fixed;inset:0;display:flex;align-items:center;

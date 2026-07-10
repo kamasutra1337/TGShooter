@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import type { Arena } from "./Arena";
 import type { Player } from "./Player";
+import { buildSoldier } from "./models/Soldier";
 
-// Enemy bot: a simple capsule-ish body with a separate "head" mesh (headshots).
+// Enemy bot: a fully-modelled soldier with a tagged head mesh (headshots).
 // AI states: wander → chase when it sees the player → shoot on a timer with
 // human-ish inaccuracy. Not authoritative — this is the offline stand-in for
-// real opponents; the same interface (root, alive, damage, update) will be
-// driven by networked state later.
+// real opponents; the same interface (root, alive, damage, update) is also how
+// networked avatars render.
 
 export type BotState = "wander" | "chase";
 
@@ -20,41 +21,14 @@ export class Bot {
   private wanderTarget = new THREE.Vector3();
   private shootTimer = 1.5;
   private velocity = new THREE.Vector3();
-  private body: THREE.Mesh;
-  private head: THREE.Mesh;
+  private hitMats: THREE.MeshStandardMaterial[];
   private readonly radius = 0.45;
   private readonly speed = 3.4;
 
   constructor(color = 0xff5a6a) {
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.5,
-      metalness: 0.1,
-    });
-    this.body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.4, 1.0, 4, 8),
-      bodyMat,
-    );
-    this.body.position.y = 0.9;
-    this.body.castShadow = true;
-    this.body.userData.part = "body";
-
-    this.head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.28, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffe0b0, roughness: 0.4 }),
-    );
-    this.head.position.y = 1.75;
-    this.head.castShadow = true;
-    this.head.userData.part = "head";
-
-    // subtle emissive eye strip so bots read at distance
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.36, 0.08, 0.05),
-      new THREE.MeshBasicMaterial({ color: 0x37e0a6 }),
-    );
-    visor.position.set(0, 1.78, 0.26);
-
-    this.root.add(this.body, this.head, visor);
+    const soldier = buildSoldier(color);
+    this.hitMats = soldier.hitMaterials;
+    this.root.add(soldier.group);
   }
 
   spawn(pos: THREE.Vector3): void {
@@ -76,16 +50,11 @@ export class Bot {
   damage(amount: number): boolean {
     if (!this.alive) return false;
     this.health -= amount;
-    // hit flash
-    (this.body.material as THREE.MeshStandardMaterial).emissive?.setHex(
-      0x552222,
-    );
+    // hit flash across the uniform/vest materials
+    for (const m of this.hitMats) m.emissive?.setHex(0x661111);
     setTimeout(() => {
-      if (this.alive)
-        (this.body.material as THREE.MeshStandardMaterial).emissive?.setHex(
-          0x000000,
-        );
-    }, 60);
+      if (this.alive) for (const m of this.hitMats) m.emissive?.setHex(0x000000);
+    }, 70);
     if (this.health <= 0) {
       this.kill();
       return true; // died

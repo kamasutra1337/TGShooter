@@ -61,6 +61,7 @@ export class Game {
   private onEnd: (win: boolean, payout: number) => void = () => {};
   private online: OnlineState | null = null;
   private net: NetworkClient | null = null;
+  private lastShotImpact = new THREE.Vector3();
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -80,6 +81,10 @@ export class Game {
     this.weapon = new Weapon(this.scene);
     this.input = new Input(canvas);
 
+    // Camera must be in the scene graph so its first-person viewmodel renders.
+    this.scene.add(this.player.camera);
+    this.weapon.attachViewmodel(this.player.camera);
+
     this.setupLights();
     this.arena.build(this.scene);
     this.input.attach();
@@ -91,12 +96,30 @@ export class Game {
     return this.input.usingTouch;
   }
 
-  private setupLights(): void {
-    const hemi = new THREE.HemisphereLight(0x9fbfff, 0x2a3140, 1.15);
-    this.scene.add(hemi);
-    this.scene.add(new THREE.AmbientLight(0x404a5e, 0.35));
+  // Debug hook (used only when the page is opened with ?debug) to exercise firing
+  // in headless verification, since pointer-lock isn't available there.
+  debugSetFiring(v: boolean): void {
+    this.input.state.firing = v;
+  }
 
-    const sun = new THREE.DirectionalLight(0xfff0d8, 1.35);
+  debugAimAtNearestBot(): boolean {
+    const bot = this.bots.find((b) => b.alive);
+    if (!bot) return false;
+    const dx = bot.position.x - this.player.position.x;
+    const dz = bot.position.z - this.player.position.z;
+    const dy = bot.position.y + 1.4 - this.player.position.y; // torso
+    const len = Math.hypot(dx, dy, dz) || 1;
+    this.player.yaw = Math.atan2(-dx, -dz);
+    this.player.pitch = -Math.asin(Math.max(-1, Math.min(1, dy / len)));
+    return true;
+  }
+
+  private setupLights(): void {
+    const hemi = new THREE.HemisphereLight(0xbcd2ff, 0x3a4150, 1.5);
+    this.scene.add(hemi);
+    this.scene.add(new THREE.AmbientLight(0x556077, 0.5));
+
+    const sun = new THREE.DirectionalLight(0xfff0d8, 1.6);
     sun.position.set(20, 40, 12);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -213,6 +236,7 @@ export class Game {
             const dmg = this.weapon.damage * (res.headshot ? this.weapon.headshotMult : 1);
             const died = res.hitBot.damage(dmg);
             this.hud.hitMarker(res.headshot);
+            if (res.point) this.showDamage(res.point, dmg, res.headshot);
             if (died) this.onBotDied(res.hitBot);
           }
         }
@@ -385,10 +409,7 @@ export class Game {
     o.fireCd -= dt;
     if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0 && this.player.alive) {
       o.fireCd = 1 / this.weapon.fireRate;
-      const origin = this.player.camera.position
-        .clone()
-        .addScaledVector(this.player.forwardVector(), 0.6);
-      this.weapon.flashAt(origin);
+      this.weapon.kick();
       Telegram.haptic("light");
     }
 
@@ -440,6 +461,7 @@ export class Game {
     if (!o) return;
     if (m.by === o.youId) {
       this.hud.hitMarker(m.headshot);
+      this.showDamage(this.lastShotImpact, m.damage, m.headshot);
       Telegram.haptic("light");
     }
     if (m.target === o.youId) {
@@ -451,10 +473,22 @@ export class Game {
   private onShot(m: ShotEventMsg): void {
     const o = this.online;
     if (!o) return;
-    const from = new THREE.Vector3(m.ox, m.oy, m.oz);
     const to = new THREE.Vector3(m.hx, m.hy, m.hz);
-    this.weapon.showTracer(from, to);
-    if (m.by !== o.youId) this.weapon.flashAt(from);
+    if (m.by === o.youId) {
+      this.lastShotImpact.copy(to); // for the damage number on the next hit
+      this.weapon.showTracer(this.weapon.muzzleWorld(), to);
+    } else {
+      this.weapon.showTracer(new THREE.Vector3(m.ox, m.oy, m.oz), to);
+      this.weapon.flashAt(new THREE.Vector3(m.ox, m.oy, m.oz));
+    }
+  }
+
+  private showDamage(world: THREE.Vector3, amount: number, headshot: boolean): void {
+    const ndc = world.clone().project(this.player.camera);
+    if (ndc.z > 1) return; // behind the camera
+    const px = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+    const py = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    this.hud.damageNumber(px, py, amount, headshot);
   }
 
   private async onNetEnd(youWon: boolean, payout: number): Promise<void> {

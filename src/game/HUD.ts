@@ -58,6 +58,17 @@ export class HUD {
     this.scoreEl.textContent = String(s);
   }
 
+  // Floating damage number at screen px,py (rises + fades via CSS).
+  damageNumber(px: number, py: number, amount: number, headshot: boolean): void {
+    const el = document.createElement("div");
+    el.className = "dmg" + (headshot ? " hs" : "");
+    el.textContent = (headshot ? "★" : "") + String(Math.round(amount));
+    el.style.left = `${px}px`;
+    el.style.top = `${py}px`;
+    this.root.appendChild(el);
+    setTimeout(() => el.remove(), 850);
+  }
+
   hitMarker(headshot: boolean): void {
     this.hitmarker.textContent = headshot ? "✖" : "✕";
     (this.hitmarker as HTMLElement).style.color = headshot

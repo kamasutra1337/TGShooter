@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { EYE } from "../../shared/sim";
+import { buildSoldier } from "./models/Soldier";
 
-// Visual stand-in for another networked player. Driven purely by server
-// snapshots — position/orientation are smoothed toward the latest authoritative
-// state so remote players glide instead of teleporting between 20Hz updates.
+// Visual stand-in for another networked player — a modelled soldier. Driven
+// purely by server snapshots: position/orientation are smoothed toward the
+// latest authoritative state so remote players glide instead of teleporting
+// between 20Hz updates.
 
 export class RemoteAvatar {
   readonly root = new THREE.Group();
@@ -12,33 +14,15 @@ export class RemoteAvatar {
   private alive = true;
 
   constructor(color: number) {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.4, 1.0, 4, 8),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.1 }),
-    );
-    body.position.y = 0.9;
-    body.castShadow = true;
-
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.28, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffe0b0, roughness: 0.4 }),
-    );
-    head.position.y = 1.75;
-    head.castShadow = true;
-
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.36, 0.08, 0.05),
-      new THREE.MeshBasicMaterial({ color: 0x37e0a6 }),
-    );
-    visor.position.set(0, 1.78, 0.26);
-
-    this.root.add(body, head, visor);
+    this.root.add(buildSoldier(color).group);
   }
 
   // Server sends EYE-height y; convert to feet for the model root.
   setTarget(eyeX: number, eyeY: number, eyeZ: number, yaw: number, alive: boolean): void {
     this.target.set(eyeX, eyeY - EYE, eyeZ);
-    this.targetYaw = yaw;
+    // soldier front is +z; server yaw is the aim direction → rotate +π so the
+    // model faces where the player is aiming
+    this.targetYaw = yaw + Math.PI;
     this.alive = alive;
     // first update snaps into place
     if (this.root.position.lengthSq() === 0) this.root.position.copy(this.target);

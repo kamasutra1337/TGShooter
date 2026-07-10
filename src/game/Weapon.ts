@@ -1,16 +1,19 @@
 import * as THREE from "three";
 import type { Player } from "./Player";
 import type { Bot } from "./Bot";
+import { buildAk47 } from "./models/Ak47";
 
-// Hitscan rifle. Fires from camera center with a small recoil-driven spread,
-// raycasts against bots (priority) and world solids, spawns a tracer + muzzle
-// flash, and applies recoil kick to the player's view.
+// Hitscan AK-47 with a first-person viewmodel. Fires from camera center (accurate
+// aim) with recoil-driven spread; tracers + muzzle flash originate at the gun
+// barrel; the viewmodel kicks on fire and dips on reload.
 
 export interface FireResult {
   hitBot: Bot | null;
   headshot: boolean;
   point: THREE.Vector3 | null;
 }
+
+const VM_BASE = new THREE.Vector3(0.2, -0.2, -0.5);
 
 export class Weapon {
   magSize = 30;
@@ -26,18 +29,58 @@ export class Weapon {
   private recoil = 0;
   private raycaster = new THREE.Raycaster();
   private scene: THREE.Scene;
-  private tracerMat = new THREE.LineBasicMaterial({
-    color: 0xfff2a8,
+
+  // viewmodel
+  private viewmodel: THREE.Group | null = null;
+  private muzzle: THREE.Object3D | null = null;
+  private vmKick = 0;
+  private flashMesh: THREE.Mesh | null = null;
+  private flashTimer = 0;
+
+  private tracerMat = new THREE.MeshBasicMaterial({
+    color: 0xfff1a0,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
   });
-  private tracers: { line: THREE.Line; life: number }[] = [];
+  private tracers: { mesh: THREE.Mesh; life: number; max: number }[] = [];
   private flash: THREE.PointLight;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
-    this.flash = new THREE.PointLight(0xffd27a, 0, 12, 2);
+    this.flash = new THREE.PointLight(0xffd27a, 0, 14, 2);
     scene.add(this.flash);
+  }
+
+  // Attach the AK to the camera as a first-person viewmodel. The camera must be
+  // added to the scene graph for its children to render.
+  attachViewmodel(camera: THREE.Camera): void {
+    const { group, muzzle } = buildAk47();
+    group.position.copy(VM_BASE);
+    group.rotation.set(0.02, 0.06, 0);
+    camera.add(group);
+    this.viewmodel = group;
+    this.muzzle = muzzle;
+
+    // muzzle flash quad, child of the barrel tip
+    const flashGeo = new THREE.PlaneGeometry(0.32, 0.32);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: 0xffe08a,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.flashMesh = new THREE.Mesh(flashGeo, flashMat);
+    this.flashMesh.visible = false;
+    muzzle.add(this.flashMesh);
+  }
+
+  muzzleWorld(): THREE.Vector3 {
+    if (this.muzzle) return this.muzzle.getWorldPosition(new THREE.Vector3());
+    return new THREE.Vector3();
   }
 
   get isReloading(): boolean {
@@ -50,7 +93,21 @@ export class Weapon {
     this.reloading = this.reloadTime;
   }
 
-  // recoil bleeds off; returns view-kick to apply this frame
+  // Cosmetic fire kick: viewmodel recoil + muzzle flash. Used by both offline
+  // (from tryFire) and online (local fire cadence).
+  kick(): void {
+    this.vmKick = Math.min(this.vmKick + 0.9, 1.4);
+    const mw = this.muzzleWorld();
+    this.flash.position.copy(mw);
+    this.flash.intensity = 7;
+    if (this.flashMesh) {
+      this.flashMesh.visible = true;
+      this.flashMesh.scale.setScalar(0.7 + Math.random() * 0.6);
+      this.flashMesh.rotation.z = Math.random() * Math.PI;
+      this.flashTimer = 0.05;
+    }
+  }
+
   update(dt: number, solids: THREE.Object3D[]): { pitchKick: number } {
     void solids;
     if (this.cooldown > 0) this.cooldown -= dt;
@@ -63,25 +120,46 @@ export class Weapon {
         this.reserve -= take;
       }
     }
-    // recoil recovery
     const recover = Math.min(this.recoil, dt * 3.5);
     this.recoil -= recover;
 
-    // flash decay
     if (this.flash.intensity > 0)
-      this.flash.intensity = Math.max(0, this.flash.intensity - dt * 40);
+      this.flash.intensity = Math.max(0, this.flash.intensity - dt * 60);
+    if (this.flashTimer > 0) {
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0 && this.flashMesh) this.flashMesh.visible = false;
+    }
+
+    // viewmodel animation: recoil ease-back + reload dip
+    if (this.viewmodel) {
+      this.vmKick += (0 - this.vmKick) * Math.min(1, dt * 12);
+      const reloadPhase =
+        this.reloading > 0
+          ? Math.sin(Math.PI * (1 - this.reloading / this.reloadTime))
+          : 0;
+      this.viewmodel.position.set(
+        VM_BASE.x,
+        VM_BASE.y - reloadPhase * 0.16 - this.vmKick * 0.01,
+        VM_BASE.z + this.vmKick * 0.06,
+      );
+      this.viewmodel.rotation.set(
+        0.02 + this.vmKick * 0.18,
+        0.06,
+        reloadPhase * 0.5,
+      );
+    }
 
     // tracers fade
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tr = this.tracers[i];
       tr.life -= dt;
-      (tr.line.material as THREE.LineBasicMaterial).opacity = Math.max(
+      (tr.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
         0,
-        tr.life * 6,
+        (tr.life / tr.max) * 0.95,
       );
       if (tr.life <= 0) {
-        this.scene.remove(tr.line);
-        tr.line.geometry.dispose();
+        this.scene.remove(tr.mesh);
+        tr.mesh.geometry.dispose();
         this.tracers.splice(i, 1);
       }
     }
@@ -98,7 +176,6 @@ export class Weapon {
     this.cooldown = 1 / this.fireRate;
     this.recoil = Math.min(this.recoil + 0.12, 0.6);
 
-    // Fire from camera with spread growing with recoil
     const origin = player.camera.position.clone();
     const dir = player.forwardVector();
     const spread = 0.008 + this.recoil * 0.03;
@@ -110,7 +187,6 @@ export class Weapon {
     this.raycaster.set(origin, dir);
     this.raycaster.far = 200;
 
-    // Collect candidate meshes: bot hitboxes + world solids
     const botMeshes: THREE.Object3D[] = [];
     for (const b of bots) if (b.alive) botMeshes.push(b.root);
 
@@ -134,8 +210,8 @@ export class Weapon {
       result.point = worldHit.point.clone();
     }
 
-    this.spawnTracer(origin, endPoint);
-    this.muzzleFlash(origin, dir);
+    this.kick();
+    this.spawnTracer(this.muzzleWorld(), endPoint);
     return result;
   }
 
@@ -149,25 +225,29 @@ export class Weapon {
     return null;
   }
 
-  // Public hooks for networked mode: draw a tracer / muzzle flash from
-  // server-reported shot events (accurate impact points).
+  // Networked: draw a tracer from server-reported shot events.
   showTracer(from: THREE.Vector3, to: THREE.Vector3): void {
     this.spawnTracer(from, to);
   }
+
+  // Remote muzzle flash (point light only — not our gun).
   flashAt(origin: THREE.Vector3): void {
     this.flash.position.copy(origin);
     this.flash.intensity = 6;
   }
 
   private spawnTracer(from: THREE.Vector3, to: THREE.Vector3): void {
-    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
-    const line = new THREE.Line(geo, this.tracerMat.clone());
-    this.scene.add(line);
-    this.tracers.push({ line, life: 0.08 });
-  }
-
-  private muzzleFlash(origin: THREE.Vector3, dir: THREE.Vector3): void {
-    this.flash.position.copy(origin).addScaledVector(dir, 0.6);
-    this.flash.intensity = 6;
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const len = dir.length();
+    if (len < 0.1) return;
+    const geo = new THREE.CylinderGeometry(0.02, 0.02, len, 6, 1, true);
+    const mesh = new THREE.Mesh(geo, this.tracerMat.clone());
+    mesh.position.copy(from).addScaledVector(dir, 0.5);
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize(),
+    );
+    this.scene.add(mesh);
+    this.tracers.push({ mesh, life: 0.09, max: 0.09 });
   }
 }
