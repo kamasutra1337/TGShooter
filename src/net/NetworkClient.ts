@@ -8,6 +8,9 @@ import type {
   ShotEventMsg,
   MatchEndMsg,
   InputMsg,
+  RoomJoinedMsg,
+  RoomStateMsg,
+  RoomErrorMsg,
 } from "../../shared/protocol";
 
 // Client-side WebSocket transport. Connects, joins a queue, streams input, and
@@ -19,6 +22,9 @@ export interface NetHandlers {
   onHit?: (m: HitEventMsg) => void;
   onShot?: (m: ShotEventMsg) => void;
   onEnd?: (m: MatchEndMsg) => void;
+  onRoomJoined?: (m: RoomJoinedMsg) => void;
+  onRoomState?: (m: RoomStateMsg) => void;
+  onRoomError?: (m: RoomErrorMsg) => void;
   onClose?: () => void;
 }
 
@@ -95,11 +101,36 @@ export class NetworkClient {
       case "end":
         this.handlers.onEnd?.(msg);
         break;
+      case "roomJoined":
+        this.handlers.onRoomJoined?.(msg);
+        break;
+      case "roomState":
+        this.handlers.onRoomState?.(msg);
+        break;
+      case "roomError":
+        this.handlers.onRoomError?.(msg);
+        break;
     }
   }
 
   join(mode: Mode, stake: number, name: string, wallet?: string): void {
     this.send({ t: "join", mode, stake, name, wallet });
+  }
+
+  createRoom(mode: Mode, stake: number, name: string, wallet?: string): void {
+    this.send({ t: "createRoom", mode, stake, name, wallet });
+  }
+  joinRoom(code: string, name: string, wallet?: string): void {
+    this.send({ t: "joinRoom", code, name, wallet });
+  }
+  setReady(ready: boolean): void {
+    this.send({ t: "ready", ready });
+  }
+  startRoom(): void {
+    this.send({ t: "startRoom" });
+  }
+  leaveRoom(): void {
+    this.send({ t: "leaveRoom" });
   }
 
   sendInput(i: Omit<InputMsg, "t" | "seq">): void {

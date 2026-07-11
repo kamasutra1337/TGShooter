@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "gen:copy": "cp ../contracts/build/match_escrow_MatchEscrow.ts src/ton/MatchEscrow.gen.ts",
     "test": "tsx test/integration.ts",
-    "test:escrow": "tsx test/escrow.ts"
+    "test:escrow": "tsx test/escrow.ts",
+    "test:rooms": "tsx test/rooms.ts"
   },
   "dependencies": {
     "@ton/core": "^0.60.0",

@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "node:http";
 import { Address } from "@ton/core";
 import { Matchmaker } from "./Matchmaker";
+import { PrivateRooms } from "./PrivateRooms";
 import { EscrowService } from "./ton/EscrowService";
 import { makeLiveSender } from "./ton/liveSender";
 import { Leaderboard } from "./Leaderboard";
@@ -53,6 +54,7 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer });
 const mm = new Matchmaker(escrow, leaderboard);
+const pr = new PrivateRooms(escrow, leaderboard);
 let nextId = 0;
 
 wss.on("connection", (ws: WebSocket) => {
@@ -77,19 +79,43 @@ wss.on("connection", (ws: WebSocket) => {
     }
     if (msg.t === "join" && !joined) {
       joined = true;
-      const mode = msg.mode === "elimination" ? "elimination" : "duel";
-      const stake = clampStake(msg.stake);
-      const name = String(msg.name ?? "Player").slice(0, 16);
-      const wallet = validWallet(msg.wallet);
-      mm.join(conn, mode, stake, name, wallet);
+      mm.join(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet));
+    } else if (msg.t === "createRoom" && !joined) {
+      joined = true;
+      pr.create(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet));
+    } else if (msg.t === "joinRoom" && !joined) {
+      joined = true;
+      const code = String(msg.code ?? "").replace(/\D/g, "").slice(0, 4);
+      pr.join(conn, code, normName(msg.name), validWallet(msg.wallet));
+    } else if (msg.t === "ready") {
+      pr.setReady(id, !!msg.ready);
+    } else if (msg.t === "startRoom") {
+      pr.start(id);
+    } else if (msg.t === "leaveRoom") {
+      pr.leave(id);
     } else if (msg.t === "input") {
       mm.routeInput(id, msg);
+      pr.routeInput(id, msg);
     }
   });
 
-  ws.on("close", () => mm.leave(id));
-  ws.on("error", () => mm.leave(id));
+  ws.on("close", () => {
+    mm.leave(id);
+    pr.leave(id);
+  });
+  ws.on("error", () => {
+    mm.leave(id);
+    pr.leave(id);
+  });
 });
+
+function normMode(v: unknown): "duel" | "elimination" {
+  return v === "elimination" ? "elimination" : "duel";
+}
+
+function normName(v: unknown): string {
+  return String(v ?? "Player").slice(0, 16);
+}
 
 function clampStake(v: unknown): number {
   const n = Number(v);

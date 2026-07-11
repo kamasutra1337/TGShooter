@@ -17,7 +17,14 @@
 
       <!-- HUD -->
       <div id="hud" class="hidden">
-        <div id="crosshair"></div>
+        <div id="crosshair" class="style-cross">
+          <span class="ch-arm ch-up"></span>
+          <span class="ch-arm ch-down"></span>
+          <span class="ch-arm ch-left"></span>
+          <span class="ch-arm ch-right"></span>
+          <span class="ch-ring"></span>
+          <span class="ch-center"></span>
+        </div>
         <div id="hud-top">
           <div id="score">0</div>
         </div>
@@ -77,7 +84,14 @@
           </div>
           <button id="btn-play" class="primary">PLAY · ONLINE</button>
           <button id="btn-practice" class="ghost wide">Practice vs bots (offline)</button>
-          <button id="btn-board" class="ghost wide">🏆 Weekly leaderboard</button>
+          <div id="menu-actions">
+            <button id="btn-create-room" class="ghost">👥 Create room</button>
+            <button id="btn-join-room" class="ghost">Join room</button>
+          </div>
+          <div id="menu-actions">
+            <button id="btn-board" class="ghost">🏆 Leaderboard</button>
+            <button id="btn-settings" class="ghost">⚙ Settings</button>
+          </div>
           <p class="net-status" id="net-status"></p>
           <p class="hint" id="controls-hint"></p>
         </div>
@@ -93,6 +107,76 @@
             <p class="board-msg">Loading…</p>
           </div>
           <button id="btn-board-close" class="primary">CLOSE</button>
+        </div>
+      </div>
+
+      <!-- Settings overlay -->
+      <div id="settings" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head">
+            <h2>⚙ Settings</h2>
+          </div>
+          <div class="set-row">
+            <span>Crosshair</span>
+            <div class="seg">
+              <button class="ch-style active" data-ch="cross">✛ Cross</button>
+              <button class="ch-style" data-ch="circle">◎ Circle</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span>Color</span>
+            <input type="color" id="ch-color" value="#37e0a6" />
+          </div>
+          <div class="swatches" id="ch-swatches"></div>
+          <div class="ch-preview">
+            <div id="ch-preview-box">
+              <div id="crosshair-preview" class="style-cross">
+                <span class="ch-arm ch-up"></span>
+                <span class="ch-arm ch-down"></span>
+                <span class="ch-arm ch-left"></span>
+                <span class="ch-arm ch-right"></span>
+                <span class="ch-ring"></span>
+                <span class="ch-center"></span>
+              </div>
+            </div>
+          </div>
+          <button id="btn-settings-close" class="primary">DONE</button>
+        </div>
+      </div>
+
+      <!-- Join by code overlay -->
+      <div id="join-code" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head"><h2>Join Room</h2></div>
+          <p class="muted-line">Enter the 4-digit code from your friend</p>
+          <input
+            id="join-code-input"
+            inputmode="numeric"
+            maxlength="4"
+            placeholder="0000"
+            autocomplete="off"
+          />
+          <div id="menu-actions">
+            <button id="btn-join-cancel" class="ghost">Cancel</button>
+            <button id="btn-join-confirm" class="primary">Join</button>
+          </div>
+          <p id="join-error" class="net-status err"></p>
+        </div>
+      </div>
+
+      <!-- Private room lobby -->
+      <div id="room" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head">
+            <h2>Private Room</h2>
+            <span id="room-code" class="room-code"></span>
+          </div>
+          <p id="room-sub" class="muted-line"></p>
+          <div id="room-players"></div>
+          <button id="btn-room-start" class="primary hidden">START MATCH</button>
+          <button id="btn-room-ready" class="ghost wide">I'm ready</button>
+          <button id="btn-room-leave" class="ghost wide">Leave room</button>
+          <p id="room-error" class="net-status err"></p>
         </div>
       </div>
 

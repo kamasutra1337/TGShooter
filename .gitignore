@@ -11,4 +11,4 @@ contracts/build/
 
 # Server runtime data (leaderboard store)
 server/data/
-server/test/.tmp-leaderboard.json
+server/test/.tmp-*.json

@@ -5,6 +5,7 @@ import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
 import { playIntro } from "./game/Intro";
+import { loadSettings, saveSettings, applyCrosshair, SWATCHES } from "./game/Settings";
 
 // Authoritative server URL. Override with VITE_SERVER_URL for production
 // (wss://your-host). Defaults to the current host on the dev port so a phone on
@@ -202,6 +203,200 @@ btnBoard.addEventListener("click", async () => {
   }
 });
 btnBoardClose.addEventListener("click", () => boardOverlay.classList.add("hidden"));
+
+// ---- settings (crosshair) ----
+const settings = loadSettings();
+applyCrosshair(settings);
+
+const settingsOverlay = document.getElementById("settings")!;
+const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement;
+const btnSettingsClose = document.getElementById("btn-settings-close") as HTMLButtonElement;
+const chStyleBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".ch-style"));
+const chColor = document.getElementById("ch-color") as HTMLInputElement;
+const chSwatches = document.getElementById("ch-swatches")!;
+
+for (const c of SWATCHES) {
+  const sw = document.createElement("button");
+  sw.className = "swatch";
+  sw.style.background = c;
+  sw.dataset.color = c;
+  sw.addEventListener("click", () => setColor(c));
+  chSwatches.appendChild(sw);
+}
+
+function refreshSettingsUI(): void {
+  chStyleBtns.forEach((b) => b.classList.toggle("active", b.dataset.ch === settings.crosshair));
+  chColor.value = settings.color;
+  Array.from(chSwatches.children).forEach((el) =>
+    el.classList.toggle("active", (el as HTMLElement).dataset.color === settings.color),
+  );
+  applyCrosshair(settings);
+}
+
+function setColor(c: string): void {
+  settings.color = c;
+  saveSettings(settings);
+  refreshSettingsUI();
+}
+
+for (const b of chStyleBtns) {
+  b.addEventListener("click", () => {
+    settings.crosshair = b.dataset.ch === "circle" ? "circle" : "cross";
+    saveSettings(settings);
+    refreshSettingsUI();
+  });
+}
+chColor.addEventListener("input", () => setColor(chColor.value));
+
+btnSettings.addEventListener("click", () => {
+  settingsOverlay.classList.remove("hidden");
+  refreshSettingsUI();
+});
+btnSettingsClose.addEventListener("click", () => settingsOverlay.classList.add("hidden"));
+refreshSettingsUI();
+
+// ---- private rooms (play with friends) ----
+const btnCreateRoom = document.getElementById("btn-create-room") as HTMLButtonElement;
+const btnJoinRoom = document.getElementById("btn-join-room") as HTMLButtonElement;
+const joinCodeOverlay = document.getElementById("join-code")!;
+const joinInput = document.getElementById("join-code-input") as HTMLInputElement;
+const btnJoinCancel = document.getElementById("btn-join-cancel") as HTMLButtonElement;
+const btnJoinConfirm = document.getElementById("btn-join-confirm") as HTMLButtonElement;
+const joinError = document.getElementById("join-error")!;
+const roomOverlay = document.getElementById("room")!;
+const roomCodeEl = document.getElementById("room-code")!;
+const roomSub = document.getElementById("room-sub")!;
+const roomPlayers = document.getElementById("room-players")!;
+const btnRoomStart = document.getElementById("btn-room-start") as HTMLButtonElement;
+const btnRoomReady = document.getElementById("btn-room-ready") as HTMLButtonElement;
+const btnRoomLeave = document.getElementById("btn-room-leave") as HTMLButtonElement;
+const roomError = document.getElementById("room-error")!;
+
+let roomNet: NetworkClient | null = null;
+const roomInfo = { mode: "duel" as Mode, stake: 1, isHost: false, ready: true };
+
+function playerName(): string {
+  return Telegram.user()?.name ?? "Player";
+}
+
+function leaveRoomToMenu(): void {
+  roomNet?.leaveRoom();
+  roomNet?.close();
+  roomNet = null;
+  roomOverlay.classList.add("hidden");
+  joinCodeOverlay.classList.add("hidden");
+  menu.classList.remove("hidden");
+  setNet("");
+}
+
+function renderRoomPlayers(m: { players: { name: string; ready: boolean; host: boolean }[]; canStart: boolean }): void {
+  btnRoomStart.disabled = !m.canStart;
+  const seats = SEATS[roomInfo.mode];
+  let html = "";
+  for (const p of m.players) {
+    const tag = p.host
+      ? '<span class="rp-tag host">HOST</span>'
+      : p.ready
+        ? '<span class="rp-tag ready">READY</span>'
+        : '<span class="rp-tag wait">…</span>';
+    html += `<div class="room-player ${p.ready ? "is-ready" : ""}"><span class="rp-dot"></span><span class="rp-name">${escapeHtml(p.name)}</span>${tag}</div>`;
+  }
+  for (let i = m.players.length; i < seats; i++)
+    html += `<div class="empty-slot">Empty slot — a bot will fill it</div>`;
+  roomPlayers.innerHTML = html;
+}
+
+function wireRoom(net: NetworkClient): void {
+  net.setHandlers({
+    onRoomJoined: (m) => {
+      roomInfo.mode = m.mode;
+      roomInfo.stake = m.stake;
+      roomInfo.isHost = m.host;
+      roomInfo.ready = m.host;
+      roomCodeEl.textContent = "#" + m.code;
+      const pot = (m.stake * SEATS[m.mode]).toFixed(1);
+      roomSub.textContent = `${m.mode === "duel" ? "1v1 Duel" : "5v5 Team"} · pot ${pot} TON · share the code with friends`;
+      btnRoomStart.classList.toggle("hidden", !m.host);
+      btnRoomReady.classList.toggle("hidden", m.host);
+      btnRoomReady.classList.toggle("on", roomInfo.ready);
+      roomError.textContent = "";
+      joinCodeOverlay.classList.add("hidden");
+      menu.classList.add("hidden");
+      roomOverlay.classList.remove("hidden");
+    },
+    onRoomState: (m) => renderRoomPlayers(m),
+    onRoomError: (m) => {
+      btnJoinConfirm.disabled = false;
+      if (!joinCodeOverlay.classList.contains("hidden")) {
+        joinError.textContent = m.reason;
+      } else {
+        roomError.textContent = m.reason;
+        if (/closed/i.test(m.reason)) setTimeout(leaveRoomToMenu, 1300);
+      }
+    },
+    onStart: (start) => {
+      roomOverlay.classList.add("hidden");
+      enterMatch();
+      const net2 = roomNet!;
+      roomNet = null; // the game owns the connection now
+      game.startOnline(roomInfo.mode, roomInfo.stake, net2, start, (win, payout) =>
+        showResult(win, payout),
+      );
+    },
+  });
+}
+
+btnCreateRoom.addEventListener("click", async () => {
+  setNet("Creating room…");
+  const net = new NetworkClient();
+  try {
+    await net.connect(SERVER_URL);
+  } catch {
+    setNet("Can't reach the game server. Start it (server/ → npm run dev).", true);
+    return;
+  }
+  setNet("");
+  roomNet = net;
+  wireRoom(net);
+  net.createRoom(mode, parseFloat(stakeSelect.value), playerName(), Ton.getState().address ?? undefined);
+});
+
+btnJoinRoom.addEventListener("click", () => {
+  joinError.textContent = "";
+  joinInput.value = "";
+  joinCodeOverlay.classList.remove("hidden");
+  joinInput.focus();
+});
+btnJoinCancel.addEventListener("click", () => joinCodeOverlay.classList.add("hidden"));
+btnJoinConfirm.addEventListener("click", async () => {
+  const code = joinInput.value.replace(/\D/g, "").slice(0, 4);
+  if (code.length !== 4) {
+    joinError.textContent = "Enter the 4-digit code";
+    return;
+  }
+  btnJoinConfirm.disabled = true;
+  joinError.textContent = "Connecting…";
+  const net = new NetworkClient();
+  try {
+    await net.connect(SERVER_URL);
+  } catch {
+    joinError.textContent = "Can't reach the game server.";
+    btnJoinConfirm.disabled = false;
+    return;
+  }
+  joinError.textContent = "";
+  roomNet = net;
+  wireRoom(net);
+  net.joinRoom(code, playerName(), Ton.getState().address ?? undefined);
+});
+
+btnRoomReady.addEventListener("click", () => {
+  roomInfo.ready = !roomInfo.ready;
+  btnRoomReady.classList.toggle("on", roomInfo.ready);
+  roomNet?.setReady(roomInfo.ready);
+});
+btnRoomStart.addEventListener("click", () => roomNet?.startRoom());
+btnRoomLeave.addEventListener("click", leaveRoomToMenu);
 
 function renderBoard(data: { week: string; entries: LbEntry[] }): void {
   boardWeek.textContent = data.week ?? "";

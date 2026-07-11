@@ -32,7 +32,42 @@ export interface InputMsg {
   reload: boolean;
 }
 
-export type ClientMsg = JoinMsg | InputMsg;
+export interface CreateRoomMsg {
+  t: "createRoom";
+  mode: Mode;
+  stake: number;
+  name: string;
+  wallet?: string;
+}
+
+export interface JoinRoomMsg {
+  t: "joinRoom";
+  code: string;
+  name: string;
+  wallet?: string;
+}
+
+export interface ReadyMsg {
+  t: "ready";
+  ready: boolean;
+}
+
+export interface StartRoomMsg {
+  t: "startRoom";
+}
+
+export interface LeaveRoomMsg {
+  t: "leaveRoom";
+}
+
+export type ClientMsg =
+  | JoinMsg
+  | InputMsg
+  | CreateRoomMsg
+  | JoinRoomMsg
+  | ReadyMsg
+  | StartRoomMsg
+  | LeaveRoomMsg;
 
 // ---- server → client ----
 export interface WelcomeMsg {
@@ -99,12 +134,43 @@ export interface MatchEndMsg {
   payout: number; // pot * (1 - rake), 0 if you lost
 }
 
+export interface RoomJoinedMsg {
+  t: "roomJoined";
+  code: string;
+  youId: string;
+  host: boolean;
+  mode: Mode;
+  stake: number;
+}
+
+export interface RoomPlayer {
+  id: string;
+  name: string;
+  ready: boolean;
+  host: boolean;
+}
+
+export interface RoomStateMsg {
+  t: "roomState";
+  code: string;
+  players: RoomPlayer[];
+  canStart: boolean;
+}
+
+export interface RoomErrorMsg {
+  t: "roomError";
+  reason: string;
+}
+
 export type ServerMsg =
   | WelcomeMsg
   | MatchStartMsg
   | SnapshotMsg
   | HitEventMsg
   | ShotEventMsg
-  | MatchEndMsg;
+  | MatchEndMsg
+  | RoomJoinedMsg
+  | RoomStateMsg
+  | RoomErrorMsg;
 
 export const RAKE = 0.05;
