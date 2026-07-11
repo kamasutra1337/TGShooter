@@ -3,12 +3,19 @@
 A mobile-first first-person shooter for Telegram Mini Apps with a **wager-based**
 PvP economy on TON. Players stake TON into a match pot; the winner takes the pot.
 
-> **Status: Phase 2 — authoritative multiplayer.** Two ways to play:
-> **PLAY ONLINE** runs a real match on an authoritative Node server (the wager
-> path — the server owns movement, hit registration, and the result), and
-> **Practice** runs offline vs local bots. Both render at 60 FPS in the browser
-> and inside Telegram. Wagering is still behind a mock wallet + mock escrow; no
-> real TON moves until Phase 3 (audited on-chain escrow). See Roadmap.
+> **Status: playable, polished vertical slice.** **PLAY ONLINE** runs a real
+> match on an authoritative Node server (the wager path — server owns movement,
+> hit registration, and the result); **Practice** runs offline vs bots; **Create
+> room** lets friends play by a 4-digit code. Renders at 60 FPS in the browser
+> and inside Telegram. Wagering is behind a mock wallet + a sandbox-tested escrow
+> contract; real TON needs the live-wiring step (Phase 3). See Roadmap.
+
+**Feel & content:** soldier models with team skins + walk animation, first-person
+AK-47 with an optic, procedural audio (shots/hits/reload/kills), bullet-impact FX
++ muzzle smoke, tracers, floating damage numbers, kill feed, nicknames (blue
+teammates / red enemies), 5v5 team battle with death-spectator, weekly
+leaderboard, in-game settings (crosshair style + color, sound), and a loading
+intro.
 
 ## Run it
 
