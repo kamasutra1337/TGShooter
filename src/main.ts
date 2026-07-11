@@ -6,6 +6,7 @@ import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
 import { playIntro } from "./game/Intro";
 import { loadSettings, saveSettings, applyCrosshair, SWATCHES } from "./game/Settings";
+import { Sound } from "./game/Audio";
 
 // Authoritative server URL. Override with VITE_SERVER_URL for production
 // (wss://your-host). Defaults to the current host on the dev port so a phone on
@@ -15,6 +16,13 @@ const SERVER_URL =
   `ws://${location.hostname || "localhost"}:8090`;
 
 Telegram.init();
+
+// Web Audio needs a user gesture — unlock on the first interaction, and add a
+// soft UI tick to menu/panel buttons.
+window.addEventListener("pointerdown", () => Sound.unlock());
+document.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement)?.closest(".menu-card, .panel-card")) Sound.ui();
+});
 
 // Loading intro: tracer rounds fly up, then it fades into the menu.
 playIntro();
@@ -450,6 +458,8 @@ function showResult(win: boolean, payout: number): void {
       : "You won the pot"
     : "Better luck next round";
   result.classList.remove("hidden");
+  if (win) Sound.win();
+  else Sound.lose();
   Telegram.notify(win ? "success" : "error");
 }
 

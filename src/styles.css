@@ -289,6 +289,91 @@ body,
   color: #6fc2ff;
 }
 
+/* Team alive-count status */
+#team-status {
+  position: absolute;
+  top: max(52px, calc(env(safe-area-inset-top) + 40px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 900;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 16px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+#team-mine {
+  color: #6fc2ff;
+}
+#team-foe {
+  color: #ff7a7a;
+}
+.ts-vs {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Kill feed */
+#killfeed {
+  position: absolute;
+  top: max(60px, calc(env(safe-area-inset-top) + 48px));
+  right: max(16px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  pointer-events: none;
+}
+.kf {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  animation: kfIn 0.2s ease;
+}
+.kf .kf-k {
+  color: #eef3f8;
+}
+.kf .kf-x {
+  color: var(--danger);
+  margin: 0 6px;
+}
+.kf .kf-v {
+  color: var(--muted);
+}
+.kf.mine {
+  border-color: rgba(55, 224, 166, 0.5);
+}
+.kf.mine .kf-k {
+  color: var(--accent);
+}
+@keyframes kfIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+/* Round countdown */
+#countdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 38%;
+  text-align: center;
+  font-size: 76px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(55, 224, 166, 0.5);
+  letter-spacing: 2px;
+}
+
 /* ---------- Touch controls ---------- */
 #touch {
   position: absolute;

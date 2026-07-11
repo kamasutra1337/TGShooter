@@ -12,6 +12,11 @@ export class HUD {
   private damageFlash = document.getElementById("damage-flash")!;
   private potBanner = document.getElementById("pot-banner")!;
   private spectate = document.getElementById("spectate")!;
+  private killfeed = document.getElementById("killfeed")!;
+  private teamStatus = document.getElementById("team-status")!;
+  private teamMine = document.getElementById("team-mine")!;
+  private teamFoe = document.getElementById("team-foe")!;
+  private countdownEl = document.getElementById("countdown")!;
 
   private lastHealth = -1;
   private lastMag = -1;
@@ -21,9 +26,48 @@ export class HUD {
 
   show(): void {
     this.root.classList.remove("hidden");
+    this.killfeed.innerHTML = "";
+    this.teamStatus.classList.add("hidden");
+    this.countdownEl.classList.add("hidden");
+    this.setSpectate(null);
   }
   hide(): void {
     this.root.classList.add("hidden");
+  }
+
+  killFeed(killer: string, victim: string, mine: boolean): void {
+    const el = document.createElement("div");
+    el.className = "kf" + (mine ? " mine" : "");
+    el.innerHTML = `<span class="kf-k">${esc(killer)}</span><span class="kf-x">✕</span><span class="kf-v">${esc(victim)}</span>`;
+    this.killfeed.prepend(el);
+    while (this.killfeed.children.length > 5) this.killfeed.lastChild?.remove();
+    setTimeout(() => el.remove(), 4500);
+  }
+
+  setTeamStatus(mine: number | null, foe = 0): void {
+    if (mine == null) {
+      this.teamStatus.classList.add("hidden");
+      return;
+    }
+    this.teamMine.textContent = String(mine);
+    this.teamFoe.textContent = String(foe);
+    this.teamStatus.classList.remove("hidden");
+  }
+
+  roundIntro(): void {
+    const seq = ["3", "2", "1", "FIGHT!"];
+    let i = 0;
+    const step = () => {
+      if (i >= seq.length) {
+        this.countdownEl.classList.add("hidden");
+        return;
+      }
+      this.countdownEl.textContent = seq[i];
+      this.countdownEl.classList.remove("hidden");
+      i++;
+      setTimeout(step, i === seq.length ? 650 : 550);
+    };
+    step();
   }
 
   setPot(pot: number, label: string): void {
@@ -99,4 +143,11 @@ export class HUD {
       if (this.hitTimer <= 0) this.hitmarker.classList.add("hidden");
     }
   }
+}
+
+function esc(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
+  );
 }

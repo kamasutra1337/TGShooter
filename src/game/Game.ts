@@ -7,6 +7,8 @@ import { HUD } from "./HUD";
 import { Input } from "./Input";
 import { RemoteAvatar } from "./RemoteAvatar";
 import { Nametags, type Tag } from "./Nametags";
+import { Effects } from "./Effects";
+import { Sound } from "./Audio";
 import { Telegram } from "../platform/telegram";
 import { Ton, type MatchStake } from "../platform/ton";
 import { NetworkClient } from "../net/NetworkClient";
@@ -58,6 +60,7 @@ export class Game {
   private weapon: Weapon;
   private hud = new HUD();
   private nametags = new Nametags();
+  private effects: Effects;
   private input: Input;
   private bots: Bot[] = [];
   private clock = new THREE.Clock();
@@ -84,6 +87,7 @@ export class Game {
 
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.weapon = new Weapon(this.scene);
+    this.effects = new Effects(this.scene);
     this.input = new Input(canvas);
 
     // Camera must be in the scene graph so its first-person viewmodel renders.
@@ -199,6 +203,7 @@ export class Game {
     this.hud.setAmmo(this.weapon.ammo, this.weapon.reserve);
     this.hud.setScore(0);
     this.hud.setPot(pot, cfg.mode === "duel" ? "1v1" : "5v5");
+    this.hud.roundIntro();
 
     this.clock.getDelta(); // flush
   }
@@ -223,6 +228,7 @@ export class Game {
     if (this.online?.running) this.onlineFrame(dt);
     else this.offlineFrame(dt);
 
+    this.effects.update(dt, this.player.camera);
     this.hud.update(dt);
     this.input.endFrame();
     this.renderer.render(this.scene, this.player.camera);
@@ -238,16 +244,30 @@ export class Game {
       if (this.input.state.firing) {
         const res = this.weapon.tryFire(this.player, this.bots, this.arena.solids);
         if (res) {
+          Sound.shot();
+          this.effects.muzzleSmoke(this.weapon.muzzleWorld());
           Telegram.haptic("light");
+          if (res.point) this.effects.impact(res.point, res.hitBot != null);
           if (res.hitBot) {
             const dmg = this.weapon.damage * (res.headshot ? this.weapon.headshotMult : 1);
             const died = res.hitBot.damage(dmg);
             this.hud.hitMarker(res.headshot);
+            Sound.hitEnemy(res.headshot);
             if (res.point) this.showDamage(res.point, dmg, res.headshot);
-            if (died) this.onBotDied(res.hitBot);
+            if (died) {
+              Sound.kill();
+              this.onBotDied(res.hitBot);
+            }
           }
         }
       }
+      if (
+        this.input.state.reloadQueued &&
+        !this.weapon.isReloading &&
+        this.weapon.ammo < this.weapon.magSize &&
+        this.weapon.reserve > 0
+      )
+        Sound.reload();
       if (this.input.state.reloadQueued) this.weapon.reload();
 
       const kick = this.weapon.update(dt, this.arena.solids);
@@ -260,6 +280,7 @@ export class Game {
         this.player.damage(incoming);
         this.hud.damageFlashPulse();
         Telegram.haptic("heavy");
+        Sound.hurt();
         if (!this.player.alive) this.onPlayerDied();
       }
 
@@ -299,6 +320,7 @@ export class Game {
     const m = this.match;
     if (!m) return;
     m.playerFrags++;
+    this.hud.killFeed("You", bot.name, true);
     Telegram.notify("success");
 
     if (m.mode === "duel") {
@@ -322,6 +344,8 @@ export class Game {
   private onPlayerDied(): void {
     const m = this.match;
     if (!m) return;
+    Sound.die();
+    this.hud.killFeed("Enemy", "You", true);
     Telegram.notify("error");
     if (m.mode === "duel") {
       m.enemyFrags++;
@@ -427,6 +451,12 @@ export class Game {
     this.hud.setAmmo(this.weapon.magSize, 180);
     this.hud.setScore(0);
     this.hud.setPot(start.pot, mode === "duel" ? "1v1" : "5v5");
+    if (mode === "elimination") {
+      const per = start.players.filter((p) => p.team === youTeam).length;
+      const foe = start.players.length - per;
+      this.hud.setTeamStatus(per, foe);
+    }
+    this.hud.roundIntro();
     this.clock.getDelta();
   }
 
@@ -443,8 +473,15 @@ export class Game {
       if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0) {
         o.fireCd = 1 / this.weapon.fireRate;
         this.weapon.kick();
+        this.effects.muzzleSmoke(this.weapon.muzzleWorld());
+        Sound.shot();
         Telegram.haptic("light");
       }
+      if (
+        this.input.state.reloadQueued &&
+        o.ammo < this.weapon.magSize
+      )
+        Sound.reload();
 
       this.net?.sendInput({
         moveX: this.input.state.moveX,
@@ -516,6 +553,7 @@ export class Game {
         const wasAlive = this.player.alive;
         this.player.health = s.health;
         this.player.alive = s.alive;
+        if (wasAlive && !s.alive) Sound.die();
         if (s.alive) {
           this.hud.setSpectate(null);
           // Reconcile: trust prediction unless it diverges, or on respawn.
@@ -536,6 +574,17 @@ export class Game {
         av.setTarget(s.x, s.y, s.z, s.yaw, s.alive);
       }
     }
+
+    if (o.mode === "elimination") {
+      let mine = 0;
+      let foe = 0;
+      for (const s of m.players) {
+        if (!s.alive) continue;
+        if (s.team === o.youTeam) mine++;
+        else foe++;
+      }
+      this.hud.setTeamStatus(mine, foe);
+    }
   }
 
   private onHit(m: HitEventMsg): void {
@@ -544,10 +593,22 @@ export class Game {
     if (m.by === o.youId) {
       this.hud.hitMarker(m.headshot);
       this.showDamage(this.lastShotImpact, m.damage, m.headshot);
+      Sound.hitEnemy(m.headshot);
       Telegram.haptic("light");
+      if (m.killed) {
+        Sound.kill();
+        this.hud.killFeed("You", o.names.get(m.target) ?? "Enemy", true);
+      }
+    } else if (m.killed) {
+      this.hud.killFeed(
+        o.names.get(m.by) ?? "?",
+        o.names.get(m.target) ?? "?",
+        m.target === o.youId,
+      );
     }
     if (m.target === o.youId) {
       this.hud.damageFlashPulse();
+      Sound.hurt();
       Telegram.haptic("heavy");
     }
   }
@@ -556,6 +617,7 @@ export class Game {
     const o = this.online;
     if (!o) return;
     const to = new THREE.Vector3(m.hx, m.hy, m.hz);
+    this.effects.impact(to, false);
     if (m.by === o.youId) {
       this.lastShotImpact.copy(to); // for the damage number on the next hit
       this.weapon.showTracer(this.weapon.muzzleWorld(), to);
