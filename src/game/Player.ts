@@ -11,8 +11,15 @@ export class Player {
   readonly position = new THREE.Vector3(0, 1.6, 18);
   velocity = new THREE.Vector3();
 
-  yaw = 0; // yaw 0 → view dir (0,0,-1), facing -z into the arena
+  yaw = 0; // player-controlled aim (yaw 0 → facing -z into the arena)
   pitch = 0;
+
+  // Recoil offset added on top of the controlled aim; recovers toward 0. The
+  // effective view = (yaw + recoilYaw, pitch + recoilPitch). This is what makes
+  // a spray climb and then settle back, CS/Valorant-style.
+  recoilPitch = 0;
+  recoilYaw = 0;
+  private readonly recoilRecover = 4; // per second
 
   health = 100;
   alive = true;
@@ -20,6 +27,29 @@ export class Player {
   readonly eyeHeight = 1.6;
   readonly radius = 0.4;
   private grounded = false;
+
+  get airborne(): boolean {
+    return !this.grounded;
+  }
+
+  // Kick the view: `up` radians upward, `side` radians sideways (recoil pattern).
+  addRecoil(up: number, side: number): void {
+    this.recoilPitch -= up; // negative pitch = looking up
+    this.recoilYaw += side;
+  }
+
+  private effYaw(): number {
+    return this.yaw + this.recoilYaw;
+  }
+  private effPitch(): number {
+    return Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch + this.recoilPitch));
+  }
+  viewYaw(): number {
+    return this.effYaw();
+  }
+  viewPitch(): number {
+    return this.effPitch();
+  }
 
   // tuning
   private readonly moveSpeed = 7.2;
@@ -40,6 +70,8 @@ export class Player {
     this.velocity.set(0, 0, 0);
     this.yaw = lookYaw;
     this.pitch = 0;
+    this.recoilPitch = 0;
+    this.recoilYaw = 0;
     this.health = 100;
     this.alive = true;
     this.syncCamera();
@@ -63,10 +95,12 @@ export class Player {
   }
 
   forwardVector(): THREE.Vector3 {
+    const y = this.effYaw();
+    const p = this.effPitch();
     return new THREE.Vector3(
-      Math.sin(this.yaw) * Math.cos(this.pitch),
-      Math.sin(this.pitch),
-      Math.cos(this.yaw) * Math.cos(this.pitch),
+      Math.sin(y) * Math.cos(p),
+      Math.sin(p),
+      Math.cos(y) * Math.cos(p),
     ).multiplyScalar(-1);
   }
 
@@ -77,6 +111,11 @@ export class Player {
     this.yaw -= input.lookDX;
     this.pitch -= input.lookDY;
     this.pitch = Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch));
+
+    // Recoil recovers toward 0 (the view settles after a spray)
+    const rec = Math.exp(-dt * this.recoilRecover);
+    this.recoilPitch *= rec;
+    this.recoilYaw *= rec;
 
     // Desired wish-direction in world space (flat)
     const sinY = Math.sin(this.yaw);
@@ -150,7 +189,7 @@ export class Player {
   private syncCamera(): void {
     this.camera.position.copy(this.position);
     this.camera.rotation.order = "YXZ";
-    this.camera.rotation.y = this.yaw;
-    this.camera.rotation.x = this.pitch;
+    this.camera.rotation.y = this.effYaw();
+    this.camera.rotation.x = this.effPitch();
   }
 }

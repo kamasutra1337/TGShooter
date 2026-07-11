@@ -28,6 +28,16 @@ const HEADSHOT_MULT = 2.2;
 const FIRE_RATE = 9;
 const RELOAD_TIME = 3;
 
+// Bullet dispersion (radians). First shot standing still is near-pinpoint; the
+// recoil *pattern* (client-side view kick) is the main, controllable inaccuracy.
+// Random bloom only grows from sustained fire / movement / being airborne.
+const BASE_SPREAD = 0.0009; // pinpoint when still + first shot
+const MOVE_SPREAD = 0.03; // added at full run
+const AIR_SPREAD = 0.055; // jumping = very inaccurate
+export const BLOOM_PER_SHOT = 0.0035; // per consecutive shot
+export const BLOOM_MAX = 0.02; // cap
+export const BLOOM_RECOVER = 0.05; // per second when not firing
+
 export interface SimInput {
   moveX: number;
   moveY: number;
@@ -161,7 +171,7 @@ export function stepWeapon(p: SimPlayer, input: SimInput, dt: number): void {
       p.reserve -= take;
     }
   }
-  p.recoil = Math.max(0, p.recoil - dt * 3.5);
+  p.recoil = Math.max(0, p.recoil - dt * BLOOM_RECOVER); // bloom recovers
 }
 
 export function startReload(p: SimPlayer): void {
@@ -188,18 +198,51 @@ export function doFire(
   }
   p.ammo--;
   p.cooldown = 1 / FIRE_RATE;
-  p.recoil = Math.min(p.recoil + 0.12, 0.6);
+  p.recoil = Math.min(p.recoil + BLOOM_PER_SHOT, BLOOM_MAX); // bloom grows
 
   const d = dirFromAngles(p.yaw, p.pitch);
-  const spread = 0.008 + p.recoil * 0.03;
-  d.x += (rand() - 0.5) * spread;
-  d.y += (rand() - 0.5) * spread;
-  d.z += (rand() - 0.5) * spread;
-  const l = Math.hypot(d.x, d.y, d.z);
+  applySpread(d, spreadFor(p), rand);
+  return { origin: { ...p.pos }, dir: d };
+}
+
+// Total random dispersion (radians) for a shot: near-zero standing still, more
+// while moving/airborne, plus accumulated bloom from sustained fire.
+export function spreadValue(moveSpeed: number, airborne: boolean, bloom: number): number {
+  const moveP = Math.min(moveSpeed / MOVE_SPEED, 1) * MOVE_SPREAD;
+  const airP = airborne ? AIR_SPREAD : 0;
+  return BASE_SPREAD + moveP + airP + bloom;
+}
+
+export function spreadFor(p: SimPlayer): number {
+  return spreadValue(Math.hypot(p.vel.x, p.vel.z), !p.grounded, p.recoil);
+}
+
+// Offset a normalized direction within a cone of half-angle `spread`, using a
+// uniform disk perpendicular to the direction (a proper cone, not per-axis box).
+export function applySpread(d: Vec3, spread: number, rand: () => number): void {
+  if (spread <= 1e-6) return;
+  const up = Math.abs(d.y) < 0.99 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  let rx = d.y * up.z - d.z * up.y;
+  let ry = d.z * up.x - d.x * up.z;
+  let rz = d.x * up.y - d.y * up.x;
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl;
+  ry /= rl;
+  rz /= rl;
+  const ux = ry * d.z - rz * d.y;
+  const uy = rz * d.x - rx * d.z;
+  const uz = rx * d.y - ry * d.x;
+  const ang = rand() * Math.PI * 2;
+  const rad = Math.sqrt(rand()) * spread;
+  const ox = Math.cos(ang) * rad;
+  const oy = Math.sin(ang) * rad;
+  d.x += rx * ox + ux * oy;
+  d.y += ry * ox + uy * oy;
+  d.z += rz * ox + uz * oy;
+  const l = Math.hypot(d.x, d.y, d.z) || 1;
   d.x /= l;
   d.y /= l;
   d.z /= l;
-  return { origin: { ...p.pos }, dir: d };
 }
 
 // Feet position of a player (for building hitboxes at a rewound time).

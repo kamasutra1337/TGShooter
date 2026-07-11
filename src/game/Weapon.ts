@@ -2,10 +2,18 @@ import * as THREE from "three";
 import type { Player } from "./Player";
 import type { Bot } from "./Bot";
 import { buildAk47 } from "./models/Ak47";
+import {
+  applySpread,
+  spreadValue,
+  BLOOM_PER_SHOT,
+  BLOOM_MAX,
+  BLOOM_RECOVER,
+} from "../../shared/sim";
 
-// Hitscan AK-47 with a first-person viewmodel. Fires from camera center (accurate
-// aim) with recoil-driven spread; tracers + muzzle flash originate at the gun
-// barrel; the viewmodel kicks on fire and dips on reload.
+// Hitscan AK-47 with a first-person viewmodel. First shot standing still is
+// pinpoint; each shot kicks the view up along a controllable recoil pattern
+// (Player.addRecoil) and adds a small random bloom that grows with sustained
+// fire / movement. Tracers + muzzle flash come from the barrel.
 
 export interface FireResult {
   hitBot: Bot | null;
@@ -26,7 +34,9 @@ export class Weapon {
 
   private cooldown = 0;
   private reloading = 0;
-  private recoil = 0;
+  private bloom = 0; // random-dispersion accumulator (grows per shot, recovers)
+  private sprayIndex = 0; // shot index within the current spray (recoil pattern)
+  private sinceShot = 99; // seconds since last shot (resets the spray)
   private raycaster = new THREE.Raycaster();
   private scene: THREE.Scene;
 
@@ -112,7 +122,7 @@ export class Weapon {
     }
   }
 
-  update(dt: number, solids: THREE.Object3D[]): { pitchKick: number } {
+  update(dt: number, solids: THREE.Object3D[]): void {
     void solids;
     if (this.cooldown > 0) this.cooldown -= dt;
     if (this.reloading > 0) {
@@ -124,8 +134,9 @@ export class Weapon {
         this.reserve -= take;
       }
     }
-    const recover = Math.min(this.recoil, dt * 3.5);
-    this.recoil -= recover;
+    // random-bloom recovery + spray idle timer
+    this.bloom = Math.max(0, this.bloom - dt * BLOOM_RECOVER);
+    this.sinceShot += dt;
 
     if (this.flash.intensity > 0)
       this.flash.intensity = Math.max(0, this.flash.intensity - dt * 60);
@@ -167,7 +178,19 @@ export class Weapon {
         this.tracers.splice(i, 1);
       }
     }
-    return { pitchKick: -recover * 0.25 };
+  }
+
+  // Deterministic recoil pattern: kick the view up (and gently sideways). Called
+  // on every shot (offline via tryFire, online via Game). The player pulls down
+  // to counter; the view settles between sprays.
+  applyRecoil(player: Player): void {
+    if (this.sinceShot > 0.35) this.sprayIndex = 0; // new spray
+    this.sinceShot = 0;
+    const i = this.sprayIndex++;
+    const up = 0.02 + Math.min(i, 10) * 0.0012; // climbs slightly through the spray
+    const side = Math.sin(i * 0.9) * 0.006 * (i > 2 ? 1 : 0.35);
+    player.addRecoil(up, side);
+    this.bloom = Math.min(this.bloom + BLOOM_PER_SHOT, BLOOM_MAX);
   }
 
   tryFire(player: Player, bots: Bot[], solids: THREE.Object3D[]): FireResult | null {
@@ -178,15 +201,17 @@ export class Weapon {
     }
     this.ammo--;
     this.cooldown = 1 / this.fireRate;
-    this.recoil = Math.min(this.recoil + 0.12, 0.6);
 
+    // Fire along the CURRENT view (first shot is pinpoint), with the small bloom
+    // accumulated from prior shots. Recoil is applied AFTER, so it climbs the
+    // NEXT shot — not this one.
     const origin = player.camera.position.clone();
     const dir = player.forwardVector();
-    const spread = 0.008 + this.recoil * 0.03;
-    dir.x += (Math.random() - 0.5) * spread;
-    dir.y += (Math.random() - 0.5) * spread;
-    dir.z += (Math.random() - 0.5) * spread;
-    dir.normalize();
+    applySpread(
+      dir,
+      spreadValue(Math.hypot(player.velocity.x, player.velocity.z), player.airborne, this.bloom),
+      Math.random,
+    );
 
     this.raycaster.set(origin, dir);
     this.raycaster.far = 200;
@@ -216,6 +241,7 @@ export class Weapon {
 
     this.kick();
     this.spawnTracer(this.muzzleWorld(), endPoint);
+    this.applyRecoil(player); // kick the view for the next shot + grow bloom
     return result;
   }
 

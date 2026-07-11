@@ -272,8 +272,7 @@ export class Game {
         Sound.reload();
       if (this.input.state.reloadQueued) this.weapon.reload();
 
-      const kick = this.weapon.update(dt, this.arena.solids);
-      this.player.pitch += kick.pitchKick;
+      this.weapon.update(dt, this.arena.solids);
 
       // bots
       let incoming = 0;
@@ -473,8 +472,10 @@ export class Game {
 
       // local muzzle-flash cadence (cosmetic; server owns real fire + hits)
       o.fireCd -= dt;
+      let fired = false;
       if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0) {
         o.fireCd = 1 / this.weapon.fireRate;
+        fired = true;
         this.weapon.kick();
         this.effects.muzzleSmoke(this.weapon.muzzleWorld());
         Sound.shot();
@@ -486,15 +487,19 @@ export class Game {
       )
         Sound.reload();
 
+      // Send the effective view (aim + recoil), so the server's shots climb with
+      // the recoil pattern too. Sent BEFORE this shot's kick → first shot is true.
       this.net?.sendInput({
         moveX: this.input.state.moveX,
         moveY: this.input.state.moveY,
-        yaw: this.player.yaw,
-        pitch: this.player.pitch,
+        yaw: this.player.viewYaw(),
+        pitch: this.player.viewPitch(),
         fire: this.input.state.firing,
         jump: this.input.state.jumpQueued,
         reload: this.input.state.reloadQueued,
       });
+
+      if (fired) this.weapon.applyRecoil(this.player); // climb the next shot
     } else {
       // dead: keep effects decaying; in team mode, spectate a teammate
       this.weapon.update(dt, this.arena.solids);
