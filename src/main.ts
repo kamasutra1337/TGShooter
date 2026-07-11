@@ -3,6 +3,7 @@ import { Game, type Mode } from "./game/Game";
 import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
+import { playIntro } from "./game/Intro";
 
 // Authoritative server URL. Override with VITE_SERVER_URL for production
 // (wss://your-host). Defaults to the current host on the dev port so a phone on
@@ -12,6 +13,9 @@ const SERVER_URL =
   `ws://${location.hostname || "localhost"}:8090`;
 
 Telegram.init();
+
+// Loading intro: tracer rounds fly up, then it fades into the menu.
+playIntro();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 

@@ -21,7 +21,7 @@ import {
   type SimInput,
   type SimPlayer,
 } from "../../shared/sim";
-import { SPAWNS } from "../../shared/arena";
+import { SPAWNS, rayArena } from "../../shared/arena";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
 import type { EscrowService } from "./ton/EscrowService";
@@ -226,12 +226,22 @@ export class Room {
       }));
 
       const hit = hitscan(shot.origin, shot.dir, targets, shooter.player.id);
+      // On a miss, stop the tracer at the wall/box it hits (not 60u through it).
+      const wallDist = rayArena(
+        shot.origin.x,
+        shot.origin.y,
+        shot.origin.z,
+        shot.dir.x,
+        shot.dir.y,
+        shot.dir.z,
+      );
+      const missDist = Number.isFinite(wallDist) ? wallDist : 60;
       const impact = hit
         ? hit.point
         : {
-            x: shot.origin.x + shot.dir.x * 60,
-            y: shot.origin.y + shot.dir.y * 60,
-            z: shot.origin.z + shot.dir.z * 60,
+            x: shot.origin.x + shot.dir.x * missDist,
+            y: shot.origin.y + shot.dir.y * missDist,
+            z: shot.origin.z + shot.dir.z * missDist,
           };
 
       this.broadcast({

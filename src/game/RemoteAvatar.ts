@@ -17,6 +17,18 @@ export class RemoteAvatar {
     this.root.add(buildSoldier(color).group);
   }
 
+  get isAlive(): boolean {
+    return this.alive;
+  }
+
+  headWorld(): THREE.Vector3 {
+    return new THREE.Vector3(
+      this.root.position.x,
+      this.root.position.y + 1.98,
+      this.root.position.z,
+    );
+  }
+
   // Server sends EYE-height y; convert to feet for the model root.
   setTarget(eyeX: number, eyeY: number, eyeZ: number, yaw: number, alive: boolean): void {
     this.target.set(eyeX, eyeY - EYE, eyeZ);

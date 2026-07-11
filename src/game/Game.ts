@@ -6,6 +6,7 @@ import { Bot } from "./Bot";
 import { HUD } from "./HUD";
 import { Input } from "./Input";
 import { RemoteAvatar } from "./RemoteAvatar";
+import { Nametags, type Tag } from "./Nametags";
 import { Telegram } from "../platform/telegram";
 import { Ton, type MatchStake } from "../platform/ton";
 import { NetworkClient } from "../net/NetworkClient";
@@ -24,6 +25,7 @@ interface OnlineState {
   ammo: number;
   fireCd: number;
   avatars: Map<string, RemoteAvatar>;
+  names: Map<string, string>;
 }
 
 const AVATAR_PALETTE = [0xff5a6a, 0xffa23a, 0x9b6cff, 0x3ad0ff, 0xff6ac0];
@@ -53,6 +55,7 @@ export class Game {
   private player: Player;
   private weapon: Weapon;
   private hud = new HUD();
+  private nametags = new Nametags();
   private input: Input;
   private bots: Bot[] = [];
   private clock = new THREE.Clock();
@@ -169,6 +172,7 @@ export class Game {
 
     const enemyCount = cfg.mode === "duel" ? 1 : seats - 1;
     const palette = [0xff5a6a, 0xffa23a, 0x9b6cff, 0x3ad0ff, 0xff6ac0];
+    const names = ["Raider", "Viper", "Ghost", "Bravo", "Kilo"];
     // Duel: opponent faces off in front of the player. Elimination: spread out.
     const duelSpawn = new THREE.Vector3(0, 0, -12);
     for (let i = 0; i < enemyCount; i++) {
@@ -179,6 +183,8 @@ export class Game {
           ? duelSpawn
           : this.arena.spawns[(i + 1) % this.arena.spawns.length];
       bot.spawn(spawn);
+      bot.home.copy(spawn); // fixed respawn point (no spawn drift/spam)
+      bot.name = names[i % names.length];
       this.bots.push(bot);
     }
 
@@ -256,20 +262,34 @@ export class Game {
         if (!this.player.alive) this.onPlayerDied();
       }
 
-      // respawns (duel only)
+      // respawns (duel only) — always back to the bot's fixed home spawn
       for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
         this.respawnQueue[i].t -= dt;
         if (this.respawnQueue[i].t <= 0) {
-          const idx = (Math.random() * this.arena.spawns.length) | 0;
-          this.respawnQueue[i].bot.spawn(this.arena.spawns[idx]);
+          const bot = this.respawnQueue[i].bot;
+          bot.spawn(bot.home);
           this.respawnQueue.splice(i, 1);
         }
       }
 
       this.hud.setHealth(this.player.health);
       this.hud.setAmmo(this.weapon.ammo, this.weapon.reserve);
+
+      // nicknames above living bots
+      const tags: Tag[] = [];
+      for (let i = 0; i < this.bots.length; i++) {
+        const b = this.bots[i];
+        if (!b.alive) continue;
+        tags.push({
+          id: "bot" + i,
+          name: b.name,
+          head: new THREE.Vector3(b.position.x, b.position.y + 2.05, b.position.z),
+        });
+      }
+      this.nametags.update(this.player.camera, tags);
     } else {
       this.weapon.update(dt, this.arena.solids);
+      this.nametags.hideAll();
     }
   }
 
@@ -362,7 +382,9 @@ export class Game {
     );
 
     const avatars = new Map<string, RemoteAvatar>();
+    const names = new Map<string, string>();
     start.players.forEach((p, i) => {
+      names.set(p.id, p.name);
       if (p.id === youId) return;
       const av = new RemoteAvatar(AVATAR_PALETTE[i % AVATAR_PALETTE.length]);
       this.scene.add(av.root);
@@ -378,6 +400,7 @@ export class Game {
       ammo: this.weapon.magSize,
       fireCd: 0,
       avatars,
+      names,
     };
 
     net.setHandlers({
@@ -424,7 +447,13 @@ export class Game {
       reload: this.input.state.reloadQueued,
     });
 
-    for (const av of o.avatars.values()) av.update(dt);
+    const tags: Tag[] = [];
+    for (const [id, av] of o.avatars) {
+      av.update(dt);
+      if (!av.isAlive) continue;
+      tags.push({ id, name: o.names.get(id) ?? "Player", head: av.headWorld() });
+    }
+    this.nametags.update(this.player.camera, tags);
   }
 
   private onSnapshot(m: SnapshotMsg): void {

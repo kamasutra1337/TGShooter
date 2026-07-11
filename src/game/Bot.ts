@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Arena } from "./Arena";
 import type { Player } from "./Player";
 import { buildSoldier } from "./models/Soldier";
+import { rayArena } from "../../shared/arena";
 
 // Enemy bot: a fully-modelled soldier with a tagged head mesh (headshots).
 // AI states: wander → chase when it sees the player → shoot on a timer with
@@ -14,6 +15,8 @@ export type BotState = "wander" | "chase";
 export class Bot {
   readonly root = new THREE.Group();
   readonly position = new THREE.Vector3();
+  readonly home = new THREE.Vector3(); // fixed respawn point
+  name = "Enemy";
   alive = true;
   health = 100;
 
@@ -118,9 +121,9 @@ export class Bot {
     if (faceDir.lengthSq() > 0.001)
       this.root.rotation.y = Math.atan2(faceDir.x, faceDir.z);
 
-    // Shooting
+    // Shooting — only with a clear line of sight (no shooting through cover).
     let dealt = 0;
-    if (this.state === "chase" && dist < 26) {
+    if (this.state === "chase" && dist < 26 && this.hasLineOfSight(player)) {
       this.shootTimer -= dt;
       if (this.shootTimer <= 0) {
         this.shootTimer = 1.1 + Math.random() * 0.9;
@@ -130,5 +133,17 @@ export class Bot {
       }
     }
     return dealt;
+  }
+
+  private hasLineOfSight(player: Player): boolean {
+    const ex = this.position.x;
+    const ey = this.position.y + 1.6; // bot eye
+    const ez = this.position.z;
+    const dx = player.position.x - ex;
+    const dy = player.position.y - ey;
+    const dz = player.position.z - ez;
+    const dist = Math.hypot(dx, dy, dz) || 1;
+    const wall = rayArena(ex, ey, ez, dx / dist, dy / dist, dz / dist);
+    return wall >= dist - 0.5; // no box/wall between us
   }
 }
