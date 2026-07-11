@@ -78,9 +78,13 @@ export function playIntro(): Promise<void> {
       }, 420);
     };
     overlay.addEventListener("click", finish);
+    // Hard wall-clock fallback: some WebViews give requestAnimationFrame a
+    // timestamp on a different origin than performance.now(), which can leave
+    // the rAF-driven end condition never firing. This guarantees dismissal.
+    setTimeout(finish, DUR + 500);
 
-    const frame = (t: number) => {
-      const el = t - start;
+    const frame = () => {
+      const el = performance.now() - start;
       if (el < 1700 && Math.random() < 0.65) {
         spawn();
         if (Math.random() < 0.5) spawn();

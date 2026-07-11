@@ -36,6 +36,8 @@ export class Input {
   private moveOrigin = { x: 0, y: 0 };
   private lookTouchId: number | null = null;
   private lookLast = { x: 0, y: 0 };
+  private fireTouchId: number | null = null;
+  private fireLast = { x: 0, y: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -174,21 +176,34 @@ export class Input {
     lookPad.addEventListener("touchend", lookEnd);
     lookPad.addEventListener("touchcancel", lookEnd);
 
-    const hold = (el: HTMLElement, on: () => void, off: () => void) => {
-      el.addEventListener("touchstart", (e) => {
-        on();
-        e.preventDefault();
-      });
-      el.addEventListener("touchend", (e) => {
-        off();
-        e.preventDefault();
-      });
+    // Fire button doubles as an aim pad: touch to fire, drag to aim — so the
+    // shooting thumb can also steer the shot (no third finger needed).
+    fire.addEventListener("touchstart", (e) => {
+      const t = e.changedTouches[0];
+      this.fireTouchId = t.identifier;
+      this.fireLast = { x: t.clientX, y: t.clientY };
+      this.state.firing = true;
+      e.preventDefault();
+    });
+    const fireMove = (e: TouchEvent) => {
+      if (this.fireTouchId === null) return;
+      const t = this.findTouch(e, this.fireTouchId);
+      if (!t) return;
+      this.state.lookDX += (t.clientX - this.fireLast.x) * this.touchSensitivity;
+      this.state.lookDY += (t.clientY - this.fireLast.y) * this.touchSensitivity;
+      this.fireLast = { x: t.clientX, y: t.clientY };
+      e.preventDefault();
     };
-    hold(
-      fire,
-      () => (this.state.firing = true),
-      () => (this.state.firing = false),
-    );
+    const fireEnd = (e: TouchEvent) => {
+      if (this.fireTouchId === null) return;
+      if (!this.findTouchInList(e.changedTouches, this.fireTouchId)) return;
+      this.fireTouchId = null;
+      this.state.firing = false;
+    };
+    window.addEventListener("touchmove", fireMove, { passive: false });
+    window.addEventListener("touchend", fireEnd);
+    window.addEventListener("touchcancel", fireEnd);
+
     jump.addEventListener("touchstart", (e) => {
       this.state.jumpQueued = true;
       e.preventDefault();
