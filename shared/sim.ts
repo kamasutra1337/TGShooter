@@ -31,12 +31,12 @@ const RELOAD_TIME = 3;
 // Bullet dispersion (radians). First shot standing still is near-pinpoint; the
 // recoil *pattern* (client-side view kick) is the main, controllable inaccuracy.
 // Random bloom only grows from sustained fire / movement / being airborne.
-const BASE_SPREAD = 0.0009; // pinpoint when still + first shot
-const MOVE_SPREAD = 0.03; // added at full run
-const AIR_SPREAD = 0.055; // jumping = very inaccurate
-export const BLOOM_PER_SHOT = 0.0035; // per consecutive shot
-export const BLOOM_MAX = 0.02; // cap
-export const BLOOM_RECOVER = 0.05; // per second when not firing
+const BASE_SPREAD = 0.0005; // essentially pinpoint standing still
+const MOVE_SPREAD = 0.012; // small run penalty (mobile players move a lot)
+const AIR_SPREAD = 0.02; // modest jump penalty
+export const BLOOM_PER_SHOT = 0.0012; // tiny per-shot bloom
+export const BLOOM_MAX = 0.007; // low cap
+export const BLOOM_RECOVER = 0.07; // fast recovery
 
 export interface SimInput {
   moveX: number;

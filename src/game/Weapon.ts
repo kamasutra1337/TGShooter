@@ -187,8 +187,8 @@ export class Weapon {
     if (this.sinceShot > 0.35) this.sprayIndex = 0; // new spray
     this.sinceShot = 0;
     const i = this.sprayIndex++;
-    const up = 0.02 + Math.min(i, 10) * 0.0012; // climbs slightly through the spray
-    const side = Math.sin(i * 0.9) * 0.006 * (i > 2 ? 1 : 0.35);
+    const up = 0.008 + Math.min(i, 10) * 0.0005; // gentle, mobile-friendly climb
+    const side = Math.sin(i * 0.9) * 0.0025 * (i > 2 ? 1 : 0.3);
     player.addRecoil(up, side);
     this.bloom = Math.min(this.bloom + BLOOM_PER_SHOT, BLOOM_MAX);
   }

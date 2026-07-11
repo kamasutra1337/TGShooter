@@ -19,7 +19,7 @@ export class Player {
   // a spray climb and then settle back, CS/Valorant-style.
   recoilPitch = 0;
   recoilYaw = 0;
-  private readonly recoilRecover = 4; // per second
+  private readonly recoilRecover = 7; // per second (snappy settle)
 
   health = 100;
   alive = true;
