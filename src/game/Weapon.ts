@@ -16,13 +16,13 @@ export interface FireResult {
 const VM_BASE = new THREE.Vector3(0.2, -0.2, -0.5);
 
 export class Weapon {
-  magSize = 30;
-  ammo = 30;
-  reserve = 90;
+  magSize = 60;
+  ammo = 60;
+  reserve = 180;
   damage = 26;
   headshotMult = 2.2;
   fireRate = 9; // rounds/sec
-  reloadTime = 1.9;
+  reloadTime = 3;
 
   private cooldown = 0;
   private reloading = 0;
@@ -76,6 +76,10 @@ export class Weapon {
     this.flashMesh = new THREE.Mesh(flashGeo, flashMat);
     this.flashMesh.visible = false;
     muzzle.add(this.flashMesh);
+  }
+
+  showViewmodel(v: boolean): void {
+    if (this.viewmodel) this.viewmodel.visible = v;
   }
 
   muzzleWorld(): THREE.Vector3 {

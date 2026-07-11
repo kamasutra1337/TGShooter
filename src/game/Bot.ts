@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Arena } from "./Arena";
 import type { Player } from "./Player";
-import { buildSoldier } from "./models/Soldier";
+import { buildSoldier, animateSoldier, type SoldierHandles } from "./models/Soldier";
 import { rayArena } from "../../shared/arena";
 
 // Enemy bot: a fully-modelled soldier with a tagged head mesh (headshots).
@@ -25,13 +25,14 @@ export class Bot {
   private shootTimer = 1.5;
   private velocity = new THREE.Vector3();
   private hitMats: THREE.MeshStandardMaterial[];
+  private rig: SoldierHandles;
   private readonly radius = 0.45;
   private readonly speed = 3.4;
 
-  constructor(color = 0xff5a6a) {
-    const soldier = buildSoldier(color);
-    this.hitMats = soldier.hitMaterials;
-    this.root.add(soldier.group);
+  constructor() {
+    this.rig = buildSoldier(1); // offline bots are the enemy team
+    this.hitMats = this.rig.hitMaterials;
+    this.root.add(this.rig.group);
   }
 
   spawn(pos: THREE.Vector3): void {
@@ -120,6 +121,9 @@ export class Bot {
     const faceDir = this.state === "chase" ? toPlayer : this.velocity;
     if (faceDir.lengthSq() > 0.001)
       this.root.rotation.y = Math.atan2(faceDir.x, faceDir.z);
+
+    // walk animation
+    animateSoldier(this.rig, Math.hypot(this.velocity.x, this.velocity.z), dt);
 
     // Shooting — only with a clear line of sight (no shooting through cover).
     let dealt = 0;

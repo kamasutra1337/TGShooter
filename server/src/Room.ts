@@ -3,6 +3,7 @@ import {
   TICK_HZ,
   SNAPSHOT_HZ,
   SEATS,
+  TEAM_SIZE,
   DUEL_TARGET,
   RAKE,
   type Mode,
@@ -21,7 +22,7 @@ import {
   type SimInput,
   type SimPlayer,
 } from "../../shared/sim";
-import { SPAWNS, rayArena } from "../../shared/arena";
+import { spawnFor, rayArena } from "../../shared/arena";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
 import type { EscrowService } from "./ton/EscrowService";
@@ -35,6 +36,7 @@ export interface Conn {
 interface Part {
   player: SimPlayer;
   name: string;
+  team: number; // 0 or 1
   wallet?: string; // TON address for on-chain payout
   conn: Conn | null; // null = bot
   bot: ServerBot | null;
@@ -103,12 +105,16 @@ export class Room {
     return this.parts.length >= this.seats;
   }
 
+  private teamFor(seat: number): number {
+    return seat < this.seats / 2 ? 0 : 1;
+  }
+
   addHuman(conn: Conn, name: string, wallet?: string): void {
     const seat = this.parts.length;
-    const spawn = SPAWNS[seat % SPAWNS.length];
     this.parts.push({
-      player: makePlayer(conn.id, spawn),
+      player: makePlayer(conn.id, spawnFor(this.mode, seat)),
       name,
+      team: this.teamFor(seat),
       wallet,
       conn,
       bot: null,
@@ -120,11 +126,12 @@ export class Room {
 
   private addBot(): void {
     const seat = this.parts.length;
-    const spawn = SPAWNS[seat % SPAWNS.length];
-    const id = "bot-" + seat;
+    const team = this.teamFor(seat);
+    const botNames = ["Raider", "Viper", "Ghost", "Bravo", "Kilo", "Wolf", "Echo", "Fox", "Nova", "Zulu"];
     this.parts.push({
-      player: makePlayer(id, spawn),
-      name: "Bot " + seat,
+      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat)),
+      name: botNames[seat % botNames.length],
+      team,
       conn: null,
       bot: new ServerBot(),
       input: emptyInput(),
@@ -143,6 +150,7 @@ export class Room {
       id: p.player.id,
       name: p.name,
       bot: !p.conn,
+      team: p.team,
     }));
     for (const p of this.parts) {
       p.conn?.send({
@@ -178,7 +186,12 @@ export class Room {
     if (!p) return;
     p.conn = null;
     p.player.alive = false; // treat as eliminated
-    this.checkWin();
+    if (this.mode === "duel") this.finish(1 - p.team); // opponent takes it
+    else this.checkWin();
+  }
+
+  private enemiesOf(p: Part): SimPlayer[] {
+    return this.parts.filter((x) => x.team !== p.team).map((x) => x.player);
   }
 
   private tick(): void {
@@ -189,14 +202,14 @@ export class Room {
 
     // 1) decide inputs (bots think), 2) move + weapon, 3) fire resolution
     for (const p of this.parts) {
-      if (p.bot) p.input = p.bot.think(p.player, this.players(), dt);
+      if (p.bot) p.input = p.bot.think(p.player, this.enemiesOf(p), dt);
 
-      // respawn countdown (duel)
+      // respawn countdown (duel only)
       if (!p.player.alive && p.respawnT > 0) {
         p.respawnT -= dt;
         if (p.respawnT <= 0) {
           const seat = this.parts.indexOf(p);
-          respawn(p.player, SPAWNS[seat % SPAWNS.length]);
+          respawn(p.player, spawnFor(this.mode, seat));
         }
       }
 
@@ -219,11 +232,14 @@ export class Room {
       if (!shot) continue;
 
       const compMs = shooter.conn ? LAGCOMP_MS : 0;
-      const targets = this.parts.map((p) => ({
-        id: p.player.id,
-        feet: this.rewind(p, this.elapsedMs - compMs),
-        alive: p.player.alive,
-      }));
+      // Only enemies are hittable — no friendly fire, teammates don't block.
+      const targets = this.parts
+        .filter((p) => p.team !== shooter.team)
+        .map((p) => ({
+          id: p.player.id,
+          feet: this.rewind(p, this.elapsedMs - compMs),
+          alive: p.player.alive,
+        }));
 
       const hit = hitscan(shot.origin, shot.dir, targets, shooter.player.id);
       // On a miss, stop the tracer at the wall/box it hits (not 60u through it).
@@ -281,37 +297,46 @@ export class Room {
 
     if (this.mode === "duel") {
       victim.respawnT = 1.6;
-      if (shooter.player.score >= DUEL_TARGET) this.finish(shooter);
+      if (shooter.player.score >= DUEL_TARGET) this.finish(shooter.team);
     } else {
-      // elimination: one life, no respawn
+      // team elimination: one life, no respawn — win when a team is wiped
       this.checkWin();
     }
     return true;
   }
 
   private checkWin(): void {
-    if (this.ended) return;
-    if (this.mode !== "elimination") return;
-    const alive = this.parts.filter((p) => p.player.alive);
-    if (alive.length <= 1) this.finish(alive[0] ?? null);
+    if (this.ended || this.mode !== "elimination") return;
+    const a0 = this.parts.some((p) => p.team === 0 && p.player.alive);
+    const a1 = this.parts.some((p) => p.team === 1 && p.player.alive);
+    if (!a0 && !a1) this.finish(null);
+    else if (!a0) this.finish(1);
+    else if (!a1) this.finish(0);
   }
 
-  private finish(winner: Part | null): void {
+  private finish(winnerTeam: number | null): void {
     if (this.ended) return;
     this.ended = true;
-    const payout = +(this.pot * (1 - RAKE)).toFixed(3);
+    const share = TEAM_SIZE[this.mode]; // players per team → split the pot
+    const payout = +((this.pot * (1 - RAKE)) / share).toFixed(3);
+    const winnerId =
+      winnerTeam == null
+        ? null
+        : (this.parts.find((p) => p.team === winnerTeam)?.player.id ?? null);
+
+    const humanWinners: Part[] = [];
     for (const p of this.parts) {
-      const youWon = winner != null && p.player.id === winner.player.id;
+      const youWon = winnerTeam != null && p.team === winnerTeam;
+      if (youWon && p.conn && p.wallet) humanWinners.push(p);
       p.conn?.send({
         t: "end",
-        winnerId: winner ? winner.player.id : null,
+        winnerId,
         youWon,
         pot: this.pot,
         payout: youWon ? payout : 0,
       });
 
-      // Record humans on the weekly leaderboard. Net TON = payout − stake for
-      // the winner, −stake for everyone else.
+      // Weekly leaderboard: net TON = payout − stake for winners, −stake else.
       if (p.conn) {
         const tonDelta = youWon ? +(payout - this.stake).toFixed(3) : -this.stake;
         const id = p.wallet ?? `name:${p.name}`;
@@ -319,10 +344,10 @@ export class Room {
       }
     }
 
-    // Notify clients immediately (server result is authoritative), then settle
-    // the pot on-chain in the background — the escrow contract pays the winner.
-    if (winner && winner.wallet) {
-      this.settleOnChain(winner.wallet);
+    // On-chain settlement only makes sense for a single winner (duel). Team
+    // splits need a multi-payout contract (future work), so skip there.
+    if (this.mode === "duel" && humanWinners.length === 1) {
+      this.settleOnChain(humanWinners[0].wallet!);
     }
     this.dispose();
   }
@@ -378,6 +403,7 @@ export class Room {
       score: p.player.score,
       ammo: p.player.ammo,
       reserve: p.player.reserve,
+      team: p.team,
     }));
     for (const p of this.parts) {
       p.conn?.send({

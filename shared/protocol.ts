@@ -7,7 +7,8 @@ export const TICK_DT = 1 / TICK_HZ;
 
 export type Mode = "duel" | "elimination";
 
-export const SEATS: Record<Mode, number> = { duel: 2, elimination: 5 };
+export const SEATS: Record<Mode, number> = { duel: 2, elimination: 10 };
+export const TEAM_SIZE: Record<Mode, number> = { duel: 1, elimination: 5 };
 export const DUEL_TARGET = 5; // frags to win a duel
 
 // ---- client → server ----
@@ -45,7 +46,7 @@ export interface MatchStartMsg {
   youId: string;
   pot: number;
   stake: number;
-  players: { id: string; name: string; bot: boolean }[];
+  players: { id: string; name: string; bot: boolean; team: number }[];
 }
 
 export interface PlayerSnap {
@@ -60,6 +61,7 @@ export interface PlayerSnap {
   score: number;
   ammo: number;
   reserve: number;
+  team: number;
 }
 
 export interface SnapshotMsg {

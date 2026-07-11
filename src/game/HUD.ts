@@ -11,6 +11,7 @@ export class HUD {
   private hitmarker = document.getElementById("hitmarker")!;
   private damageFlash = document.getElementById("damage-flash")!;
   private potBanner = document.getElementById("pot-banner")!;
+  private spectate = document.getElementById("spectate")!;
 
   private lastHealth = -1;
   private lastMag = -1;
@@ -31,6 +32,15 @@ export class HUD {
       this.potBanner.classList.remove("hidden");
     } else {
       this.potBanner.classList.add("hidden");
+    }
+  }
+
+  setSpectate(name: string | null): void {
+    if (name) {
+      this.spectate.innerHTML = `☠ ELIMINATED — SPECTATING <b>${name}</b>`;
+      this.spectate.classList.remove("hidden");
+    } else {
+      this.spectate.classList.add("hidden");
     }
   }
 

@@ -56,7 +56,29 @@ export function buildAk47(): AkHandles {
   // front sight post
   add(new THREE.BoxGeometry(0.02, 0.06, 0.02), metal, 0, 0.06, -0.5);
   // rear sight
-  add(new THREE.BoxGeometry(0.03, 0.03, 0.03), metal, 0, 0.06, -0.18);
+  add(new THREE.BoxGeometry(0.03, 0.03, 0.03), metal, 0, 0.06, -0.22);
+
+  // ---- optical scope on the top rail ----
+  add(new THREE.BoxGeometry(0.05, 0.02, 0.2), metal, 0, 0.085, -0.08); // rail
+  add(new THREE.BoxGeometry(0.022, 0.05, 0.022), metal, 0, 0.11, -0.02); // rear mount
+  add(new THREE.BoxGeometry(0.022, 0.05, 0.022), metal, 0, 0.11, -0.15); // front mount
+  add(new THREE.CylinderGeometry(0.033, 0.033, 0.17, 16), dark, 0, 0.14, -0.08, Math.PI / 2); // tube
+  add(new THREE.CylinderGeometry(0.042, 0.042, 0.035, 16), dark, 0, 0.14, -0.17, Math.PI / 2); // objective bell
+  add(new THREE.CylinderGeometry(0.038, 0.038, 0.03, 16), dark, 0, 0.14, 0.0, Math.PI / 2); // eyepiece
+  // lens glow + red dot (faces the shooter, +z)
+  const lens = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 0.008, 16),
+    new THREE.MeshBasicMaterial({ color: 0x2a4a6a }),
+  );
+  lens.position.set(0, 0.14, 0.012);
+  lens.rotation.x = Math.PI / 2;
+  group.add(lens);
+  const dot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.006, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff2b2b }),
+  );
+  dot.position.set(0, 0.14, 0.017);
+  group.add(dot);
 
   // pistol grip (angled)
   add(new THREE.BoxGeometry(0.045, 0.13, 0.06), dark, 0, -0.1, 0.06, 0.35, 0, 0);

@@ -1,5 +1,6 @@
 import "./styles.css";
 import { Game, type Mode } from "./game/Game";
+import { SEATS } from "../shared/protocol";
 import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
@@ -77,7 +78,7 @@ for (const chip of modeChips) {
 
 function updatePlayLabel(): void {
   const stake = parseFloat(stakeSelect.value);
-  const seats = mode === "duel" ? 2 : 5;
+  const seats = SEATS[mode];
   const pot = +(stake * seats).toFixed(3);
   btnPlay.textContent = `PLAY ONLINE · POT ${pot} TON`;
 }
@@ -117,7 +118,7 @@ btnWallet.addEventListener("click", async () => {
 // PLAY = online, authoritative-server match (the wager path).
 btnPlay.addEventListener("click", async () => {
   const stake = parseFloat(stakeSelect.value);
-  const seats = mode === "duel" ? 2 : 5;
+  const seats = SEATS[mode];
   const pot = +(stake * seats).toFixed(3);
 
   // Wager gate: with a wallet connected, take the stake into escrow (mock).
@@ -146,7 +147,7 @@ btnPlay.addEventListener("click", async () => {
   setNet(
     mode === "duel"
       ? "Matchmaking… (a bot fills in if no opponent)"
-      : "Matchmaking 5 players… (bots fill empty seats)",
+      : "Matchmaking 5v5… (bots fill empty seats)",
   );
   net.setHandlers({
     onStart: (start) => {

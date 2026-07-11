@@ -8,6 +8,7 @@ export interface Tag {
   id: string;
   name: string;
   head: THREE.Vector3; // world position above the head
+  friendly: boolean; // teammate (blue) vs enemy (red)
 }
 
 export class Nametags {
@@ -32,10 +33,10 @@ export class Nametags {
       }
       if (!el) {
         el = document.createElement("div");
-        el.className = "nametag";
         this.root.appendChild(el);
         this.labels.set(tag.id, el);
       }
+      el.className = "nametag " + (tag.friendly ? "friendly" : "enemy");
       if (el.textContent !== tag.name) el.textContent = tag.name;
       el.style.display = "block";
       el.style.left = `${(ndc.x * 0.5 + 0.5) * window.innerWidth}px`;

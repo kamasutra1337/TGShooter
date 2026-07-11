@@ -21,12 +21,12 @@ const JUMP = 8;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 
 // weapon
-export const MAG_SIZE = 30;
-export const START_RESERVE = 90;
+export const MAG_SIZE = 60;
+export const START_RESERVE = 180;
 const DAMAGE = 26;
 const HEADSHOT_MULT = 2.2;
 const FIRE_RATE = 9;
-const RELOAD_TIME = 1.9;
+const RELOAD_TIME = 3;
 
 export interface SimInput {
   moveX: number;

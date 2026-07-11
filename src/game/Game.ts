@@ -11,7 +11,8 @@ import { Telegram } from "../platform/telegram";
 import { Ton, type MatchStake } from "../platform/ton";
 import { NetworkClient } from "../net/NetworkClient";
 import type { MatchStartMsg, HitEventMsg, ShotEventMsg, SnapshotMsg } from "../../shared/protocol";
-import { SPAWNS } from "../../shared/arena";
+import { spawnFor } from "../../shared/arena";
+import { SEATS } from "../../shared/protocol";
 import { EYE } from "../../shared/sim";
 
 export type Mode = "duel" | "elimination";
@@ -21,14 +22,15 @@ interface OnlineState {
   pot: number;
   stake: number;
   youId: string;
+  youTeam: number;
   running: boolean;
   ammo: number;
   fireCd: number;
   avatars: Map<string, RemoteAvatar>;
   names: Map<string, string>;
+  teams: Map<string, number>;
+  spectateId: string | null; // teammate being followed while dead
 }
-
-const AVATAR_PALETTE = [0xff5a6a, 0xffa23a, 0x9b6cff, 0x3ad0ff, 0xff6ac0];
 
 export interface MatchConfig {
   mode: Mode;
@@ -146,7 +148,7 @@ export class Game {
   // --- match lifecycle ---
   startMatch(cfg: MatchConfig, onEnd: (win: boolean, payout: number) => void): void {
     this.onEnd = onEnd;
-    const seats = cfg.mode === "duel" ? 2 : 5;
+    const seats = SEATS[cfg.mode];
     const pot = +(cfg.stake * seats).toFixed(3);
     const stake: MatchStake = {
       matchId: "local-" + Math.floor(performance.now()),
@@ -170,13 +172,12 @@ export class Game {
     this.bots = [];
     this.respawnQueue = [];
 
-    const enemyCount = cfg.mode === "duel" ? 1 : seats - 1;
-    const palette = [0xff5a6a, 0xffa23a, 0x9b6cff, 0x3ad0ff, 0xff6ac0];
+    const enemyCount = cfg.mode === "duel" ? 1 : 5; // practice: 5 enemy bots
     const names = ["Raider", "Viper", "Ghost", "Bravo", "Kilo"];
     // Duel: opponent faces off in front of the player. Elimination: spread out.
     const duelSpawn = new THREE.Vector3(0, 0, -12);
     for (let i = 0; i < enemyCount; i++) {
-      const bot = new Bot(palette[i % palette.length]);
+      const bot = new Bot();
       this.scene.add(bot.root);
       const spawn =
         cfg.mode === "duel"
@@ -191,13 +192,13 @@ export class Game {
     // Reset player
     this.player.reset(new THREE.Vector3(0, 1.6, 20), 0);
     this.weapon.ammo = this.weapon.magSize;
-    this.weapon.reserve = 90;
+    this.weapon.reserve = 180;
 
     this.hud.show();
     this.hud.setHealth(100);
     this.hud.setAmmo(this.weapon.ammo, this.weapon.reserve);
     this.hud.setScore(0);
-    this.hud.setPot(pot, cfg.mode === "duel" ? "1v1" : "BATTLE");
+    this.hud.setPot(pot, cfg.mode === "duel" ? "1v1" : "5v5");
 
     this.clock.getDelta(); // flush
   }
@@ -284,6 +285,7 @@ export class Game {
           id: "bot" + i,
           name: b.name,
           head: new THREE.Vector3(b.position.x, b.position.y + 2.05, b.position.z),
+          friendly: false, // offline bots are all enemies
         });
       }
       this.nametags.update(this.player.camera, tags);
@@ -309,7 +311,7 @@ export class Game {
     } else {
       // elimination: bot is out for good
       const remaining = this.bots.filter((b) => b.alive).length;
-      this.hud.setScore(m.seats - 1 - remaining); // eliminations
+      this.hud.setScore(this.bots.length - remaining); // eliminations
       if (remaining === 0) {
         void this.finish(true);
         return;
@@ -375,18 +377,22 @@ export class Game {
       0,
       start.players.findIndex((p) => p.id === youId),
     );
-    const feet = SPAWNS[seat % SPAWNS.length];
+    const youTeam = start.players[seat]?.team ?? 0;
+    const feet = spawnFor(mode, seat);
+    // team 0 spawns +z facing -z (yaw 0); team 1 spawns -z facing +z (yaw π)
     this.player.reset(
       new THREE.Vector3(feet[0], feet[1] + EYE, feet[2]),
-      seat === 0 ? 0 : Math.PI,
+      youTeam === 0 ? 0 : Math.PI,
     );
 
     const avatars = new Map<string, RemoteAvatar>();
     const names = new Map<string, string>();
-    start.players.forEach((p, i) => {
+    const teams = new Map<string, number>();
+    start.players.forEach((p) => {
       names.set(p.id, p.name);
+      teams.set(p.id, p.team);
       if (p.id === youId) return;
-      const av = new RemoteAvatar(AVATAR_PALETTE[i % AVATAR_PALETTE.length]);
+      const av = new RemoteAvatar(p.team); // team-colored skin
       this.scene.add(av.root);
       avatars.set(p.id, av);
     });
@@ -396,11 +402,14 @@ export class Game {
       pot: start.pot,
       stake,
       youId,
+      youTeam,
       running: true,
       ammo: this.weapon.magSize,
       fireCd: 0,
       avatars,
       names,
+      teams,
+      spectateId: null,
     };
 
     net.setHandlers({
@@ -415,45 +424,83 @@ export class Game {
 
     this.hud.show();
     this.hud.setHealth(100);
-    this.hud.setAmmo(this.weapon.magSize, 90);
+    this.hud.setAmmo(this.weapon.magSize, 180);
     this.hud.setScore(0);
-    this.hud.setPot(start.pot, mode === "duel" ? "1v1" : "BATTLE");
+    this.hud.setPot(start.pot, mode === "duel" ? "1v1" : "5v5");
     this.clock.getDelta();
   }
 
   private onlineFrame(dt: number): void {
     const o = this.online!;
-    if (this.player.alive) this.player.update(dt, this.input.state, this.arena);
 
-    // tracer / muzzle-flash decay
-    this.weapon.update(dt, this.arena.solids);
+    if (this.player.alive) {
+      this.weapon.showViewmodel(true);
+      this.player.update(dt, this.input.state, this.arena);
+      this.weapon.update(dt, this.arena.solids);
 
-    // local muzzle-flash cadence (cosmetic; server owns real fire + hits)
-    o.fireCd -= dt;
-    if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0 && this.player.alive) {
-      o.fireCd = 1 / this.weapon.fireRate;
-      this.weapon.kick();
-      Telegram.haptic("light");
+      // local muzzle-flash cadence (cosmetic; server owns real fire + hits)
+      o.fireCd -= dt;
+      if (this.input.state.firing && o.fireCd <= 0 && o.ammo > 0) {
+        o.fireCd = 1 / this.weapon.fireRate;
+        this.weapon.kick();
+        Telegram.haptic("light");
+      }
+
+      this.net?.sendInput({
+        moveX: this.input.state.moveX,
+        moveY: this.input.state.moveY,
+        yaw: this.player.yaw,
+        pitch: this.player.pitch,
+        fire: this.input.state.firing,
+        jump: this.input.state.jumpQueued,
+        reload: this.input.state.reloadQueued,
+      });
+    } else {
+      // dead: keep effects decaying; in team mode, spectate a teammate
+      this.weapon.update(dt, this.arena.solids);
+      this.weapon.showViewmodel(false);
+      if (o.mode === "elimination") this.spectate(o);
     }
-
-    // stream input to the authoritative server
-    this.net?.sendInput({
-      moveX: this.input.state.moveX,
-      moveY: this.input.state.moveY,
-      yaw: this.player.yaw,
-      pitch: this.player.pitch,
-      fire: this.input.state.firing,
-      jump: this.input.state.jumpQueued,
-      reload: this.input.state.reloadQueued,
-    });
 
     const tags: Tag[] = [];
     for (const [id, av] of o.avatars) {
       av.update(dt);
       if (!av.isAlive) continue;
-      tags.push({ id, name: o.names.get(id) ?? "Player", head: av.headWorld() });
+      tags.push({
+        id,
+        name: o.names.get(id) ?? "Player",
+        head: av.headWorld(),
+        friendly: o.teams.get(id) === o.youTeam,
+      });
     }
     this.nametags.update(this.player.camera, tags);
+  }
+
+  // Follow a living teammate in third person while eliminated.
+  private spectate(o: OnlineState): void {
+    let target = o.spectateId ? o.avatars.get(o.spectateId) : undefined;
+    if (!target || !target.isAlive) {
+      o.spectateId = null;
+      for (const [id, av] of o.avatars) {
+        if (av.isAlive && o.teams.get(id) === o.youTeam) {
+          o.spectateId = id;
+          target = av;
+          break;
+        }
+      }
+    }
+    if (target && o.spectateId) {
+      const head = target.headWorld();
+      const ry = target.root.rotation.y;
+      const fx = Math.sin(ry);
+      const fz = Math.cos(ry);
+      const cam = this.player.camera;
+      cam.position.set(head.x - fx * 3.5, head.y + 1.4, head.z - fz * 3.5);
+      cam.lookAt(head.x + fx * 4, head.y - 0.3, head.z + fz * 4);
+      this.hud.setSpectate(o.names.get(o.spectateId) ?? "teammate");
+    } else {
+      this.hud.setSpectate(null); // no teammates left — match is ending
+    }
   }
 
   private onSnapshot(m: SnapshotMsg): void {
@@ -469,16 +516,22 @@ export class Game {
         const wasAlive = this.player.alive;
         this.player.health = s.health;
         this.player.alive = s.alive;
-        // Reconcile: trust client prediction unless it diverges, or on respawn.
-        if (!s.alive) this.player.teleport(serverEye);
-        else if (!wasAlive || this.player.position.distanceTo(serverEye) > 2)
+        if (s.alive) {
+          this.hud.setSpectate(null);
+          // Reconcile: trust prediction unless it diverges, or on respawn.
+          if (!wasAlive || this.player.position.distanceTo(serverEye) > 2)
+            this.player.teleport(serverEye);
+        } else if (o.mode !== "elimination") {
+          // duel: sit at the death spot until respawn (spectator handles team)
           this.player.teleport(serverEye);
+        }
       } else {
         let av = o.avatars.get(s.id);
         if (!av) {
-          av = new RemoteAvatar(AVATAR_PALETTE[o.avatars.size % AVATAR_PALETTE.length]);
+          av = new RemoteAvatar(s.team);
           this.scene.add(av.root);
           o.avatars.set(s.id, av);
+          o.teams.set(s.id, s.team);
         }
         av.setTarget(s.x, s.y, s.z, s.yaw, s.alive);
       }

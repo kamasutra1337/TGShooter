@@ -49,7 +49,7 @@ on-screen fire / jump / reload buttons.
 | Mode | Seats | Pot | Win condition |
 |------|-------|-----|---------------|
 | **1 vs 1 Duel** | 2 | `stake × 2` | First to 5 eliminations |
-| **Battle (elimination)** | 5 | `stake × 5` | Last one standing (one life) |
+| **5 vs 5 Team Battle** | 10 | `stake × 10` | Wipe the enemy team (one life; spectate teammates on death) |
 
 Stake per player is chosen in the lobby (0.5 / 1 / 2 / 5 TON). The pot is shown
 in the lobby and on the in-match HUD banner.

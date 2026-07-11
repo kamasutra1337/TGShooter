@@ -48,7 +48,7 @@ export const COLLIDERS: AABB[] = BOXES.map(([x, y, z, w, h, d]) => ({
   maxZ: z + d / 2,
 }));
 
-// Duel + elimination spawn points (feet positions; eye = +eyeHeight).
+// Duel spawn points (feet positions; eye = +eyeHeight).
 export const SPAWNS: [number, number, number][] = [
   [0, 0, 20],
   [0, 0, -12],
@@ -56,6 +56,31 @@ export const SPAWNS: [number, number, number][] = [
   [18, 0, -18],
   [0, 0, -18],
 ];
+
+// Team battle: team 0 spawns on the +z side, team 1 on the -z side (5 each).
+export const TEAM_SPAWNS: [number, number, number][][] = [
+  [
+    [-11, 0, 19],
+    [-5.5, 0, 20],
+    [0, 0, 19],
+    [5.5, 0, 20],
+    [11, 0, 19],
+  ],
+  [
+    [-11, 0, -17],
+    [-5.5, 0, -18],
+    [0, 0, -17],
+    [5.5, 0, -18],
+    [11, 0, -17],
+  ],
+];
+
+// Spawn (feet) for a given mode + seat index. Shared so client and server agree.
+export function spawnFor(mode: string, seat: number): [number, number, number] {
+  if (mode === "duel") return SPAWNS[seat % SPAWNS.length];
+  const team = seat < 5 ? 0 : 1;
+  return TEAM_SPAWNS[team][seat % 5];
+}
 
 export interface Vec3 {
   x: number;
