@@ -219,6 +219,8 @@ Sound.setMuted(!settings.sound);
 
 const settingsOverlay = document.getElementById("settings")!;
 const sndOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".snd-opt"));
+const gfxOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".gfx-opt"));
+game.setGraphics(settings.graphics !== "lite");
 const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement;
 const btnSettingsClose = document.getElementById("btn-settings-close") as HTMLButtonElement;
 const chStyleBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".ch-style"));
@@ -243,6 +245,7 @@ function refreshSettingsUI(): void {
   sndOpts.forEach((b) =>
     b.classList.toggle("active", (b.dataset.snd === "on") === settings.sound),
   );
+  gfxOpts.forEach((b) => b.classList.toggle("active", b.dataset.gfx === settings.graphics));
   applyCrosshair(settings);
 }
 
@@ -250,6 +253,15 @@ for (const b of sndOpts) {
   b.addEventListener("click", () => {
     settings.sound = b.dataset.snd === "on";
     Sound.setMuted(!settings.sound);
+    saveSettings(settings);
+    refreshSettingsUI();
+  });
+}
+
+for (const b of gfxOpts) {
+  b.addEventListener("click", () => {
+    settings.graphics = b.dataset.gfx === "lite" ? "lite" : "high";
+    game.setGraphics(settings.graphics !== "lite");
     saveSettings(settings);
     refreshSettingsUI();
   });

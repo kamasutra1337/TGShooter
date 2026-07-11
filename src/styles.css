@@ -501,7 +501,8 @@ body,
   gap: 6px;
 }
 .ch-style,
-.snd-opt {
+.snd-opt,
+.gfx-opt {
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -511,7 +512,8 @@ body,
   font-size: 13px;
 }
 .ch-style.active,
-.snd-opt.active {
+.snd-opt.active,
+.gfx-opt.active {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(55, 224, 166, 0.12);

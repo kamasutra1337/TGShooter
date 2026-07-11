@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { Arena } from "./Arena";
 import { Player } from "./Player";
 import { Weapon } from "./Weapon";
@@ -71,20 +75,27 @@ export class Game {
   private net: NetworkClient | null = null;
   private lastShotImpact = new THREE.Vector3();
   private stepTimer = 0;
+  private composer: EffectComposer | null = null;
+  private bloom: UnrealBloomPass | null = null;
+  private effectsOn = true;
 
   constructor(canvas: HTMLCanvasElement) {
+    const dpr = Math.min(window.devicePixelRatio, 2);
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: window.devicePixelRatio < 2,
+      antialias: false, // MSAA handled by the composer's render target
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Filmic color pipeline — the biggest single lift toward a modern look.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.3;
 
     this.scene.background = makeSkyTexture();
-    this.scene.fog = new THREE.Fog(0x141b2e, 34, 88);
+    this.scene.fog = new THREE.Fog(0x141b2e, 34, 92);
 
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.weapon = new Weapon(this.scene);
@@ -98,18 +109,59 @@ export class Game {
     this.setupLights();
     this.arena.build(this.scene);
     this.input.attach();
+    this.setupComposer();
 
     window.addEventListener("resize", () => this.onResize());
+  }
+
+  private setupComposer(): void {
+    // Post-processing is optional: if the GPU can't allocate the HDR/MSAA target
+    // (e.g. old device, software renderer), fall back to plain rendering rather
+    // than failing to start the game.
+    try {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const dpr = this.renderer.getPixelRatio();
+      const rt = new THREE.WebGLRenderTarget(1, 1, {
+        type: THREE.HalfFloatType,
+        samples: dpr > 1.5 ? 2 : 4,
+      });
+      const composer = new EffectComposer(this.renderer, rt);
+      composer.setPixelRatio(dpr);
+      composer.setSize(w, h);
+      composer.addPass(new RenderPass(this.scene, this.player.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.5, 0.82);
+      composer.addPass(this.bloom);
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+    } catch (e) {
+      console.warn("[gfx] post-processing unavailable, using plain render:", e);
+      this.composer = null;
+      this.effectsOn = false;
+    }
   }
 
   get usingTouch(): boolean {
     return this.input.usingTouch;
   }
 
+  // Graphics quality toggle (Settings). Lite = plain render (no post-processing).
+  setGraphics(high: boolean): void {
+    this.effectsOn = high;
+  }
+
   // Debug hook (used only when the page is opened with ?debug) to exercise firing
   // in headless verification, since pointer-lock isn't available there.
   debugSetFiring(v: boolean): void {
     this.input.state.firing = v;
+  }
+
+  debugFaceBotClose(): boolean {
+    const bot = this.bots.find((b) => b.alive);
+    if (!bot) return false;
+    this.player.teleport(new THREE.Vector3(bot.position.x + 1.4, 1.5, bot.position.z + 3.0));
+    this.debugAimAtNearestBot();
+    return true;
   }
 
   debugAimAtNearestBot(): boolean {
@@ -125,29 +177,45 @@ export class Game {
   }
 
   private setupLights(): void {
-    const hemi = new THREE.HemisphereLight(0xbcd2ff, 0x3a4150, 1.5);
-    this.scene.add(hemi);
-    this.scene.add(new THREE.AmbientLight(0x556077, 0.5));
+    // Ambient sky/ground bounce
+    this.scene.add(new THREE.HemisphereLight(0xaec6ff, 0x2b3040, 1.15));
+    this.scene.add(new THREE.AmbientLight(0x3a4356, 0.3));
 
-    const sun = new THREE.DirectionalLight(0xfff0d8, 1.6);
-    sun.position.set(20, 40, 12);
+    // Key light (sun) — warm, casts soft shadows
+    const sun = new THREE.DirectionalLight(0xfff2df, 2.5);
+    sun.position.set(24, 42, 16);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 120;
-    const d = 32;
+    sun.shadow.camera.far = 130;
+    const d = 34;
     sun.shadow.camera.left = -d;
     sun.shadow.camera.right = d;
     sun.shadow.camera.top = d;
     sun.shadow.camera.bottom = -d;
-    sun.shadow.bias = -0.0004;
+    sun.shadow.bias = -0.0003;
+    sun.shadow.radius = 3; // softer edges
     this.scene.add(sun);
+
+    // Cool fill from the opposite side (no shadow) — lifts the dark side
+    const fill = new THREE.DirectionalLight(0x9fb8ff, 0.55);
+    fill.position.set(-18, 16, -20);
+    this.scene.add(fill);
+
+    // Rim/back light — separates silhouettes from the background
+    const rim = new THREE.DirectionalLight(0xbcd2ff, 0.7);
+    rim.position.set(-8, 20, 26);
+    this.scene.add(rim);
   }
 
   private onResize(): void {
-    this.player.camera.aspect = window.innerWidth / window.innerHeight;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.player.camera.aspect = w / h;
     this.player.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(w, h);
+    this.composer?.setSize(w, h);
+    this.bloom?.setSize(w, h);
   }
 
   // --- match lifecycle ---
@@ -232,7 +300,17 @@ export class Game {
     this.effects.update(dt, this.player.camera);
     this.hud.update(dt);
     this.input.endFrame();
-    this.renderer.render(this.scene, this.player.camera);
+    if (this.effectsOn && this.composer) {
+      try {
+        this.composer.render();
+      } catch {
+        // Post-processing unsupported on this GPU → fall back permanently.
+        this.effectsOn = false;
+        this.renderer.render(this.scene, this.player.camera);
+      }
+    } else {
+      this.renderer.render(this.scene, this.player.camera);
+    }
   }
 
   private offlineFrame(dt: number): void {

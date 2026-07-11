@@ -15,6 +15,7 @@ import {
   crateStack,
   sandbagWall,
 } from "./models/Props";
+import { asphalt, concrete } from "./textures";
 
 // Renders the arena from the SHARED collider list. Each collider is skinned with
 // a realistic prop for looks, plus an INVISIBLE box proxy that carries the exact
@@ -33,10 +34,17 @@ export class Arena {
   build(scene: THREE.Scene): void {
     scene.add(this.group);
 
-    // Floor — dark asphalt
+    // Floor — textured asphalt with surface relief
+    const asph = asphalt(this.halfSize);
     const floor = new THREE.Mesh(
       new THREE.BoxGeometry(this.halfSize * 2, 1, this.halfSize * 2),
-      new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 1 }),
+      new THREE.MeshStandardMaterial({
+        map: asph.map,
+        normalMap: asph.normalMap,
+        normalScale: new THREE.Vector2(0.7, 0.7),
+        roughness: 0.96,
+        metalness: 0.05,
+      }),
     );
     floor.position.y = -0.5;
     floor.receiveShadow = true;
@@ -105,9 +113,16 @@ export class Arena {
 
   private wall(w: number, h: number, d: number): THREE.Group {
     const g = new THREE.Group();
-    const concrete = new THREE.MeshStandardMaterial({ color: 0x565b62, roughness: 0.95 });
+    const con = concrete(Math.max(1, Math.round(Math.max(w, d) / 6)));
+    const mat = new THREE.MeshStandardMaterial({
+      map: con.map,
+      normalMap: con.normalMap,
+      normalScale: new THREE.Vector2(0.5, 0.5),
+      color: 0x8f949c,
+      roughness: 0.95,
+    });
     const trim = new THREE.MeshStandardMaterial({ color: 0x33373d, roughness: 0.8 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), concrete);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     body.castShadow = true;
     body.receiveShadow = true;
     g.add(body);

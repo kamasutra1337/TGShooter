@@ -1,10 +1,12 @@
 import * as THREE from "three";
+import { wood } from "../textures";
 
 // Realistic map props from primitives. Builders return a Group centered at the
 // origin, sized to fit (w,h,d) so Arena can "skin" a collider box with a prop
 // without changing collision. Plus free-standing decoration (barrels, stacks).
 
-const woodMat = () => new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.8 });
+const woodMat = () =>
+  new THREE.MeshStandardMaterial({ map: wood(), color: 0xd8d0c4, roughness: 0.82 });
 const woodDark = () => new THREE.MeshStandardMaterial({ color: 0x5a3c22, roughness: 0.85 });
 const metalGreen = () => new THREE.MeshStandardMaterial({ color: 0x45503a, roughness: 0.6, metalness: 0.3 });
 const concreteMat = () => new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.95 });
