@@ -141,7 +141,17 @@ you cannot let real TON touch a game the client can cheat.
    inventory, marketplace, matchmaking/rooms.
 5. **Phase 5 — Content & polish.** More maps, weapons, sounds, VFX, progression.
 
-## Deploy as a Telegram Mini App
+## Live Telegram Mini App
+
+- **Bot:** [@ShootTonbot](https://t.me/ShootTonbot) — open it and tap the **🎮 Play**
+  menu button.
+- **Host:** `https://kamasutra1337.github.io/TGShooter/` (GitHub Pages, gh-pages branch).
+- **Redeploy** after changes: `bash scripts/deploy-pages.sh`.
+- Practice (vs bots) works instantly inside Telegram. Online duels / 5v5 / rooms
+  need a public **wss://** game server (deploy `server/` to a cloud host and set
+  `VITE_SERVER_URL` before building) — not yet wired for the Mini App.
+
+## Deploy as a Telegram Mini App (how it was set up)
 
 1. `npm run build` → static files in `dist/`.
 2. Host `dist/` on any HTTPS static host (Vercel, Netlify, Cloudflare Pages).
