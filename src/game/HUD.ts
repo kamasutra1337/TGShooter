@@ -103,6 +103,7 @@ export class HUD {
     if (mag !== this.lastMag) {
       this.lastMag = mag;
       this.ammoMag.textContent = String(mag);
+      this.ammoMag.classList.toggle("low", mag <= 10);
     }
     if (reserve !== this.lastReserve) {
       this.lastReserve = reserve;

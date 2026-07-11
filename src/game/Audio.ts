@@ -137,6 +137,10 @@ class SoundEngine {
     this.noiseBurst(0.4, 0.25, "lowpass", 500, 0.7);
   }
 
+  footstep(): void {
+    this.noiseBurst(0.05, 0.12, "lowpass", 280, 0.9);
+  }
+
   ui(): void {
     this.tone(880, 0.03, "sine", 0.18);
   }

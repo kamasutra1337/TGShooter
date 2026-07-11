@@ -10,6 +10,7 @@ export class RemoteAvatar {
   readonly root = new THREE.Group();
   readonly team: number;
   private rig: SoldierHandles;
+  private hitMats: THREE.MeshStandardMaterial[];
   private target = new THREE.Vector3();
   private targetYaw = 0;
   private alive = true;
@@ -18,7 +19,16 @@ export class RemoteAvatar {
   constructor(team: number) {
     this.team = team;
     this.rig = buildSoldier(team);
+    this.hitMats = this.rig.hitMaterials;
     this.root.add(this.rig.group);
+  }
+
+  // Brief red flash when shot (visual hit feedback).
+  flash(): void {
+    for (const m of this.hitMats) m.emissive?.setHex(0x661111);
+    setTimeout(() => {
+      if (this.alive) for (const m of this.hitMats) m.emissive?.setHex(0x000000);
+    }, 70);
   }
 
   get isAlive(): boolean {

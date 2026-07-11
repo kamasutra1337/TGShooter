@@ -70,6 +70,7 @@ export class Game {
   private online: OnlineState | null = null;
   private net: NetworkClient | null = null;
   private lastShotImpact = new THREE.Vector3();
+  private stepTimer = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -239,6 +240,7 @@ export class Game {
 
     if (m && m.running && this.player.alive) {
       this.player.update(dt, this.input.state, this.arena);
+      this.footstep(dt);
 
       // fire
       if (this.input.state.firing) {
@@ -466,6 +468,7 @@ export class Game {
     if (this.player.alive) {
       this.weapon.showViewmodel(true);
       this.player.update(dt, this.input.state, this.arena);
+      this.footstep(dt);
       this.weapon.update(dt, this.arena.solids);
 
       // local muzzle-flash cadence (cosmetic; server owns real fire + hits)
@@ -590,6 +593,7 @@ export class Game {
   private onHit(m: HitEventMsg): void {
     const o = this.online;
     if (!o) return;
+    o.avatars.get(m.target)?.flash(); // red hit flash on the struck soldier
     if (m.by === o.youId) {
       this.hud.hitMarker(m.headshot);
       this.showDamage(this.lastShotImpact, m.damage, m.headshot);
@@ -625,6 +629,16 @@ export class Game {
     } else {
       this.weapon.showTracer(new THREE.Vector3(m.ox, m.oy, m.oz), to);
       this.weapon.flashAt(new THREE.Vector3(m.ox, m.oy, m.oz));
+    }
+  }
+
+  // Soft footstep cadence while the local player runs.
+  private footstep(dt: number): void {
+    this.stepTimer -= dt;
+    const sp = Math.hypot(this.player.velocity.x, this.player.velocity.z);
+    if (sp > 1.8 && this.stepTimer <= 0) {
+      this.stepTimer = 0.42;
+      Sound.footstep();
     }
   }
 

@@ -186,6 +186,9 @@ body,
 #ammo-mag {
   color: var(--accent);
 }
+#ammo-mag.low {
+  color: var(--danger);
+}
 #ammo-sep,
 #ammo-reserve {
   color: var(--muted);
