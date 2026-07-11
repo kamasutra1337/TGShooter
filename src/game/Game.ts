@@ -593,6 +593,7 @@ export class Game {
     if (m.by === o.youId) {
       this.hud.hitMarker(m.headshot);
       this.showDamage(this.lastShotImpact, m.damage, m.headshot);
+      this.effects.impact(this.lastShotImpact, true); // red flesh puff
       Sound.hitEnemy(m.headshot);
       Telegram.haptic("light");
       if (m.killed) {

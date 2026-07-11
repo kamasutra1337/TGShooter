@@ -54,18 +54,22 @@ export class HUD {
     this.teamStatus.classList.remove("hidden");
   }
 
+  private countdownTimer: ReturnType<typeof setTimeout> | null = null;
+
   roundIntro(): void {
+    if (this.countdownTimer) clearTimeout(this.countdownTimer); // no overlap
     const seq = ["3", "2", "1", "FIGHT!"];
     let i = 0;
     const step = () => {
       if (i >= seq.length) {
         this.countdownEl.classList.add("hidden");
+        this.countdownTimer = null;
         return;
       }
       this.countdownEl.textContent = seq[i];
       this.countdownEl.classList.remove("hidden");
       i++;
-      setTimeout(step, i === seq.length ? 650 : 550);
+      this.countdownTimer = setTimeout(step, i === seq.length ? 650 : 550);
     };
     step();
   }
