@@ -12,3 +12,10 @@ contracts/build/
 # Server runtime data (leaderboard store)
 server/data/
 server/test/.tmp-*.json
+
+# Android / Capacitor build artifacts
+*.apk
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
