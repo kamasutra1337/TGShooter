@@ -4,10 +4,11 @@
 export interface GameSettings {
   crosshair: "cross" | "circle";
   color: string;
+  sound: boolean;
 }
 
 const KEY = "tgshooter.settings";
-const DEFAULT: GameSettings = { crosshair: "cross", color: "#37e0a6" };
+const DEFAULT: GameSettings = { crosshair: "cross", color: "#37e0a6", sound: true };
 
 export function loadSettings(): GameSettings {
   try {

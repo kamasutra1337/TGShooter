@@ -82,8 +82,8 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.scene.background = new THREE.Color(0x0b0e14);
-    this.scene.fog = new THREE.Fog(0x0b0e14, 30, 80);
+    this.scene.background = makeSkyTexture();
+    this.scene.fog = new THREE.Fog(0x141b2e, 34, 88);
 
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.weapon = new Weapon(this.scene);
@@ -663,4 +663,21 @@ export class Game {
     this.net = null;
     this.online = null;
   }
+}
+
+// Vertical gradient sky (dark top → lighter horizon), as a background texture.
+function makeSkyTexture(): THREE.Texture {
+  const c = document.createElement("canvas");
+  c.width = 4;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, "#0a1122");
+  g.addColorStop(0.55, "#131a2c");
+  g.addColorStop(1, "#232c42");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

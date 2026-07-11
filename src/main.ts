@@ -215,8 +215,10 @@ btnBoardClose.addEventListener("click", () => boardOverlay.classList.add("hidden
 // ---- settings (crosshair) ----
 const settings = loadSettings();
 applyCrosshair(settings);
+Sound.setMuted(!settings.sound);
 
 const settingsOverlay = document.getElementById("settings")!;
+const sndOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".snd-opt"));
 const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement;
 const btnSettingsClose = document.getElementById("btn-settings-close") as HTMLButtonElement;
 const chStyleBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".ch-style"));
@@ -238,7 +240,19 @@ function refreshSettingsUI(): void {
   Array.from(chSwatches.children).forEach((el) =>
     el.classList.toggle("active", (el as HTMLElement).dataset.color === settings.color),
   );
+  sndOpts.forEach((b) =>
+    b.classList.toggle("active", (b.dataset.snd === "on") === settings.sound),
+  );
   applyCrosshair(settings);
+}
+
+for (const b of sndOpts) {
+  b.addEventListener("click", () => {
+    settings.sound = b.dataset.snd === "on";
+    Sound.setMuted(!settings.sound);
+    saveSettings(settings);
+    refreshSettingsUI();
+  });
 }
 
 function setColor(c: string): void {
