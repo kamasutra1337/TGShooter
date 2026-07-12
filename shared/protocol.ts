@@ -1,5 +1,6 @@
 // Wire protocol shared by client and server. Deterministic constants live here
 // so both sides simulate identically.
+import type { WeaponId } from "./weapons";
 
 export const TICK_HZ = 30; // authoritative simulation rate
 export const SNAPSHOT_HZ = 20; // state broadcast rate
@@ -18,6 +19,7 @@ export interface JoinMsg {
   stake: number;
   name: string;
   wallet?: string; // player's TON address (for on-chain payout), if connected
+  weapon?: WeaponId; // chosen loadout (defaults to rifle)
 }
 
 export interface InputMsg {
@@ -38,6 +40,7 @@ export interface CreateRoomMsg {
   stake: number;
   name: string;
   wallet?: string;
+  weapon?: WeaponId;
 }
 
 export interface JoinRoomMsg {
@@ -45,6 +48,7 @@ export interface JoinRoomMsg {
   code: string;
   name: string;
   wallet?: string;
+  weapon?: WeaponId;
 }
 
 export interface ReadyMsg {
@@ -95,7 +99,7 @@ export interface MatchStartMsg {
   youId: string;
   pot: number;
   stake: number;
-  players: { id: string; name: string; bot: boolean; team: number }[];
+  players: { id: string; name: string; bot: boolean; team: number; weapon: WeaponId }[];
 }
 
 export interface PlayerSnap {

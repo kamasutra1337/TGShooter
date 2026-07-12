@@ -5,6 +5,14 @@ import {
   HALF_SIZE,
   type Vec3,
 } from "./arena";
+import {
+  WEAPONS,
+  weaponOf,
+  falloffMult,
+  DEFAULT_WEAPON,
+  type WeaponId,
+  type WeaponSpec,
+} from "./weapons";
 
 // Deterministic player + weapon simulation. The server runs this authoritatively;
 // the client runs the SAME code to predict its own player, so corrections are
@@ -20,23 +28,9 @@ const GRAVITY = 22;
 const JUMP = 8;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 
-// weapon
-export const MAG_SIZE = 60;
-export const START_RESERVE = 180;
-const DAMAGE = 26;
-const HEADSHOT_MULT = 2.2;
-const FIRE_RATE = 9;
-const RELOAD_TIME = 3;
-
-// Bullet dispersion (radians). First shot standing still is near-pinpoint; the
-// recoil *pattern* (client-side view kick) is the main, controllable inaccuracy.
-// Random bloom only grows from sustained fire / movement / being airborne.
-const BASE_SPREAD = 0.0005; // essentially pinpoint standing still
-const MOVE_SPREAD = 0.012; // small run penalty (mobile players move a lot)
-const AIR_SPREAD = 0.02; // modest jump penalty
-export const BLOOM_PER_SHOT = 0.0012; // tiny per-shot bloom
-export const BLOOM_MAX = 0.007; // low cap
-export const BLOOM_RECOVER = 0.07; // fast recovery
+// Weapon behaviour now lives in shared/weapons.ts, keyed by SimPlayer.weaponId.
+// A sensible default mag size for any code that needs one before a player exists.
+export const MAG_SIZE = WEAPONS[DEFAULT_WEAPON].magSize;
 
 export interface SimInput {
   moveX: number;
@@ -50,6 +44,7 @@ export interface SimInput {
 
 export interface SimPlayer {
   id: string;
+  weaponId: WeaponId;
   pos: Vec3; // eye position
   vel: Vec3;
   yaw: number;
@@ -65,9 +60,15 @@ export interface SimPlayer {
   score: number;
 }
 
-export function makePlayer(id: string, feet: [number, number, number]): SimPlayer {
+export function makePlayer(
+  id: string,
+  feet: [number, number, number],
+  weaponId: WeaponId = DEFAULT_WEAPON,
+): SimPlayer {
+  const spec = weaponOf(weaponId);
   return {
     id,
+    weaponId: spec.id,
     pos: { x: feet[0], y: feet[1] + EYE, z: feet[2] },
     vel: { x: 0, y: 0, z: 0 },
     yaw: 0,
@@ -75,8 +76,8 @@ export function makePlayer(id: string, feet: [number, number, number]): SimPlaye
     grounded: false,
     alive: true,
     health: 100,
-    ammo: MAG_SIZE,
-    reserve: START_RESERVE,
+    ammo: spec.magSize,
+    reserve: spec.reserve,
     cooldown: 0,
     reloadT: 0,
     recoil: 0,
@@ -85,12 +86,13 @@ export function makePlayer(id: string, feet: [number, number, number]): SimPlaye
 }
 
 export function respawn(p: SimPlayer, feet: [number, number, number]): void {
+  const spec = weaponOf(p.weaponId);
   p.pos = { x: feet[0], y: feet[1] + EYE, z: feet[2] };
   p.vel = { x: 0, y: 0, z: 0 };
   p.health = 100;
   p.alive = true;
-  p.ammo = MAG_SIZE;
-  p.reserve = START_RESERVE;
+  p.ammo = spec.magSize;
+  p.reserve = spec.reserve;
   p.cooldown = 0;
   p.reloadT = 0;
 }
@@ -160,23 +162,25 @@ export function stepMovement(p: SimPlayer, input: SimInput, dt: number): void {
 }
 
 export function stepWeapon(p: SimPlayer, input: SimInput, dt: number): void {
+  const spec = weaponOf(p.weaponId);
   if (p.cooldown > 0) p.cooldown -= dt;
   if (input.reload) startReload(p);
   if (p.reloadT > 0) {
     p.reloadT -= dt;
     if (p.reloadT <= 0) {
-      const need = MAG_SIZE - p.ammo;
+      const need = spec.magSize - p.ammo;
       const take = Math.min(need, p.reserve);
       p.ammo += take;
       p.reserve -= take;
     }
   }
-  p.recoil = Math.max(0, p.recoil - dt * BLOOM_RECOVER); // bloom recovers
+  p.recoil = Math.max(0, p.recoil - dt * spec.bloomRecover); // bloom recovers
 }
 
 export function startReload(p: SimPlayer): void {
-  if (p.reloadT > 0 || p.ammo === MAG_SIZE || p.reserve <= 0) return;
-  p.reloadT = RELOAD_TIME;
+  const spec = weaponOf(p.weaponId);
+  if (p.reloadT > 0 || p.ammo === spec.magSize || p.reserve <= 0) return;
+  p.reloadT = spec.reloadTime;
 }
 
 export function dirFromAngles(yaw: number, pitch: number): Vec3 {
@@ -184,37 +188,52 @@ export function dirFromAngles(yaw: number, pitch: number): Vec3 {
   return { x: -Math.sin(yaw) * cp, y: -Math.sin(pitch), z: -Math.cos(yaw) * cp };
 }
 
-// Returns muzzle origin + shot direction if the player can fire this tick, else
-// null. Mutates ammo/cooldown/recoil. `rand` is a 0..1 supplier so the server
-// can keep spread deterministic per-tick if desired.
+// Returns muzzle origin + one direction PER PELLET if the player can fire this
+// tick (1 for most guns, N for the shotgun), else null. Mutates ammo/cooldown/
+// recoil. `rand` is a 0..1 supplier so the server can keep spread deterministic.
 export function doFire(
   p: SimPlayer,
   rand: () => number,
-): { origin: Vec3; dir: Vec3 } | null {
+): { origin: Vec3; dirs: Vec3[] } | null {
   if (!p.alive || p.cooldown > 0 || p.reloadT > 0) return null;
   if (p.ammo <= 0) {
     startReload(p);
     return null;
   }
+  const spec = weaponOf(p.weaponId);
   p.ammo--;
-  p.cooldown = 1 / FIRE_RATE;
-  p.recoil = Math.min(p.recoil + BLOOM_PER_SHOT, BLOOM_MAX); // bloom grows
+  p.cooldown = 1 / spec.fireRate;
+  p.recoil = Math.min(p.recoil + spec.bloomPerShot, spec.bloomMax); // bloom grows
 
-  const d = dirFromAngles(p.yaw, p.pitch);
-  applySpread(d, spreadFor(p), rand);
-  return { origin: { ...p.pos }, dir: d };
+  // Aim wobble (movement/bloom) is applied to the centre line; each pellet then
+  // scatters within the weapon's pellet cone around it.
+  const centre = dirFromAngles(p.yaw, p.pitch);
+  applySpread(centre, spreadFor(p), rand);
+
+  const dirs: Vec3[] = [];
+  for (let i = 0; i < spec.pellets; i++) {
+    const d = { ...centre };
+    if (spec.pelletSpread > 0) applySpread(d, spec.pelletSpread, rand);
+    dirs.push(d);
+  }
+  return { origin: { ...p.pos }, dirs };
 }
 
 // Total random dispersion (radians) for a shot: near-zero standing still, more
 // while moving/airborne, plus accumulated bloom from sustained fire.
-export function spreadValue(moveSpeed: number, airborne: boolean, bloom: number): number {
-  const moveP = Math.min(moveSpeed / MOVE_SPEED, 1) * MOVE_SPREAD;
-  const airP = airborne ? AIR_SPREAD : 0;
-  return BASE_SPREAD + moveP + airP + bloom;
+export function spreadValue(
+  spec: WeaponSpec,
+  moveSpeed: number,
+  airborne: boolean,
+  bloom: number,
+): number {
+  const moveP = Math.min(moveSpeed / MOVE_SPEED, 1) * spec.moveSpread;
+  const airP = airborne ? spec.airSpread : 0;
+  return spec.baseSpread + moveP + airP + bloom;
 }
 
 export function spreadFor(p: SimPlayer): number {
-  return spreadValue(Math.hypot(p.vel.x, p.vel.z), !p.grounded, p.recoil);
+  return spreadValue(weaponOf(p.weaponId), Math.hypot(p.vel.x, p.vel.z), !p.grounded, p.recoil);
 }
 
 // Offset a normalized direction within a cone of half-angle `spread`, using a
@@ -265,12 +284,14 @@ export interface HitscanResult {
 }
 
 // Authoritative hitscan: ray vs each target's head+body spheres, blocked by
-// arena walls. `targets` are the (possibly lag-compensated) positions.
+// arena walls. `targets` are the (possibly lag-compensated) positions. Damage
+// comes from the shooter's weapon spec, scaled by distance falloff.
 export function hitscan(
   origin: Vec3,
   dir: Vec3,
   targets: HitboxState[],
   excludeId: string,
+  spec: WeaponSpec,
 ): HitscanResult | null {
   const wallDist = rayArena(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z);
 
@@ -304,7 +325,7 @@ export function hitscan(
           y: origin.y + dir.y * t,
           z: origin.z + dir.z * t,
         },
-        damage: DAMAGE * (headshot ? HEADSHOT_MULT : 1),
+        damage: spec.damage * (headshot ? spec.headMult : 1) * falloffMult(spec, t),
       };
     }
   }
@@ -325,4 +346,3 @@ function raySphere(o: Vec3, d: Vec3, c: Vec3, r: number): number {
   return t;
 }
 
-export { DAMAGE, HEADSHOT_MULT, FIRE_RATE, RELOAD_TIME };

@@ -1,5 +1,6 @@
 import { Room, type Conn } from "./Room";
 import { SEATS, type Mode, type InputMsg } from "../../shared/protocol";
+import type { WeaponId } from "../../shared/weapons";
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -13,6 +14,7 @@ interface Member {
   conn: Conn;
   name: string;
   wallet?: string;
+  weapon?: WeaponId;
   ready: boolean;
 }
 
@@ -50,14 +52,21 @@ export class PrivateRooms {
     return stake > 0 && this.funding != null && this.escrow.enabled;
   }
 
-  create(conn: Conn, mode: Mode, stake: number, name: string, wallet?: string): void {
+  create(
+    conn: Conn,
+    mode: Mode,
+    stake: number,
+    name: string,
+    wallet?: string,
+    weapon?: WeaponId,
+  ): void {
     const code = this.genCode();
     const lobby: Lobby = {
       code,
       mode,
       stake,
       hostId: conn.id,
-      members: [{ conn, name, wallet, ready: true }],
+      members: [{ conn, name, wallet, weapon, ready: true }],
       game: null,
       funding: null,
     };
@@ -67,14 +76,14 @@ export class PrivateRooms {
     this.broadcast(lobby);
   }
 
-  join(conn: Conn, code: string, name: string, wallet?: string): void {
+  join(conn: Conn, code: string, name: string, wallet?: string, weapon?: WeaponId): void {
     const lobby = this.lobbies.get(code);
     if (!lobby) return conn.send({ t: "roomError", reason: "Room not found" });
     if (lobby.game) return conn.send({ t: "roomError", reason: "Match already started" });
     if (lobby.members.length >= SEATS[lobby.mode])
       return conn.send({ t: "roomError", reason: "Room is full" });
 
-    lobby.members.push({ conn, name, wallet, ready: false });
+    lobby.members.push({ conn, name, wallet, weapon, ready: false });
     this.lobbyOf.set(conn.id, lobby);
     conn.send({
       t: "roomJoined",
@@ -129,7 +138,7 @@ export class PrivateRooms {
         for (const m of lobby.members) this.lobbyOf.delete(m.conn.id);
       },
     );
-    for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet);
+    for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet, m.weapon);
     lobby.game = game;
 
     if (staked && this.funding) {

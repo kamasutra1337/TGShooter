@@ -194,6 +194,81 @@ body,
   color: var(--muted);
   font-size: 22px;
 }
+#weapon-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ---- loadout picker (menu) ---- */
+#loadout {
+  margin: 10px 0 4px;
+}
+.loadout-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+#weapon-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.weapon-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.weapon-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.weapon-card.active {
+  border-color: var(--accent);
+  background: rgba(55, 224, 166, 0.12);
+  color: #fff;
+}
+.wc-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.wc-name {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+#weapon-detail {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+#weapon-detail b {
+  color: #fff;
+}
+.wstat {
+  display: inline-block;
+  margin: 4px 6px 0 0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 11px;
+}
 
 #hitmarker {
   position: absolute;

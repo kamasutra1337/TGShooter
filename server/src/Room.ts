@@ -23,6 +23,7 @@ import {
   type SimPlayer,
 } from "../../shared/sim";
 import { spawnFor, rayArena } from "../../shared/arena";
+import { weaponOf, type WeaponId } from "../../shared/weapons";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
 import type { EscrowService } from "./ton/EscrowService";
@@ -122,10 +123,10 @@ export class Room {
     return seat < this.seats / 2 ? 0 : 1;
   }
 
-  addHuman(conn: Conn, name: string, wallet?: string): void {
+  addHuman(conn: Conn, name: string, wallet?: string, weapon?: WeaponId): void {
     const seat = this.parts.length;
     this.parts.push({
-      player: makePlayer(conn.id, spawnFor(this.mode, seat)),
+      player: makePlayer(conn.id, spawnFor(this.mode, seat), weapon),
       name,
       team: this.teamFor(seat),
       wallet,
@@ -141,8 +142,10 @@ export class Room {
     const seat = this.parts.length;
     const team = this.teamFor(seat);
     const botNames = ["Raider", "Viper", "Ghost", "Bravo", "Kilo", "Wolf", "Echo", "Fox", "Nova", "Zulu"];
+    // Bots carry auto weapons only (their aim is tuned for sustained fire).
+    const botWeapon: WeaponId = seat % 2 ? "smg" : "rifle";
     this.parts.push({
-      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat)),
+      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat), botWeapon),
       name: botNames[seat % botNames.length],
       team,
       conn: null,
@@ -164,6 +167,7 @@ export class Room {
       name: p.name,
       bot: !p.conn,
       team: p.team,
+      weapon: p.player.weaponId,
     }));
     for (const p of this.parts) {
       p.conn?.send({
@@ -252,6 +256,7 @@ export class Room {
       const shot = doFire(shooter.player, Math.random);
       if (!shot) continue;
 
+      const spec = weaponOf(shooter.player.weaponId);
       const compMs = shooter.conn ? LAGCOMP_MS : 0;
       // Only enemies are hittable — no friendly fire, teammates don't block.
       const targets = this.parts
@@ -262,24 +267,22 @@ export class Room {
           alive: p.player.alive,
         }));
 
-      const hit = hitscan(shot.origin, shot.dir, targets, shooter.player.id);
-      // On a miss, stop the tracer at the wall/box it hits (not 60u through it).
-      const wallDist = rayArena(
-        shot.origin.x,
-        shot.origin.y,
-        shot.origin.z,
-        shot.dir.x,
-        shot.dir.y,
-        shot.dir.z,
-      );
-      const missDist = Number.isFinite(wallDist) ? wallDist : 60;
-      const impact = hit
-        ? hit.point
-        : {
-            x: shot.origin.x + shot.dir.x * missDist,
-            y: shot.origin.y + shot.dir.y * missDist,
-            z: shot.origin.z + shot.dir.z * missDist,
-          };
+      // Resolve every pellet. Aggregate damage per victim so a shotgun blast
+      // reads as one hit marker, and pick the centre pellet's endpoint for the
+      // tracer/impact FX.
+      const perVictim = new Map<string, { dmg: number; headshot: boolean }>();
+      let impact: { x: number; y: number; z: number } | null = null;
+      for (let i = 0; i < shot.dirs.length; i++) {
+        const dir = shot.dirs[i];
+        const hit = hitscan(shot.origin, dir, targets, shooter.player.id, spec);
+        if (i === 0) impact = hit ? hit.point : this.wallEnd(shot.origin, dir);
+        if (!hit) continue;
+        const acc = perVictim.get(hit.targetId) ?? { dmg: 0, headshot: false };
+        acc.dmg += hit.damage;
+        acc.headshot = acc.headshot || hit.headshot;
+        perVictim.set(hit.targetId, acc);
+      }
+      if (!impact) impact = this.wallEnd(shot.origin, shot.dirs[0]);
 
       this.broadcast({
         t: "shot",
@@ -292,19 +295,26 @@ export class Room {
         hz: impact.z,
       });
 
-      if (hit) {
-        const victim = this.parts.find((p) => p.player.id === hit.targetId)!;
-        const killed = this.applyDamage(shooter, victim, hit.damage);
+      for (const [targetId, acc] of perVictim) {
+        const victim = this.parts.find((p) => p.player.id === targetId)!;
+        const killed = this.applyDamage(shooter, victim, acc.dmg);
         this.broadcast({
           t: "hit",
           by: shooter.player.id,
           target: victim.player.id,
-          headshot: hit.headshot,
-          damage: hit.damage,
+          headshot: acc.headshot,
+          damage: acc.dmg,
           killed,
         });
       }
     }
+  }
+
+  // Endpoint of a ray at the first wall/box it hits (or 60u if it hits nothing).
+  private wallEnd(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }) {
+    const wallDist = rayArena(o.x, o.y, o.z, d.x, d.y, d.z);
+    const dist = Number.isFinite(wallDist) ? wallDist : 60;
+    return { x: o.x + d.x * dist, y: o.y + d.y * dist, z: o.z + d.z * dist };
   }
 
   private applyDamage(shooter: Part, victim: Part, dmg: number): boolean {

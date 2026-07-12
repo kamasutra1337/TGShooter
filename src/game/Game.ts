@@ -27,6 +27,7 @@ import type { MatchStartMsg, HitEventMsg, ShotEventMsg, SnapshotMsg } from "../.
 import { spawnFor } from "../../shared/arena";
 import { SEATS } from "../../shared/protocol";
 import { EYE } from "../../shared/sim";
+import { WEAPONS, DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
 
 export type Mode = "duel" | "elimination";
 
@@ -49,6 +50,7 @@ interface OnlineState {
 export interface MatchConfig {
   mode: Mode;
   stake: number;
+  weapon?: WeaponId;
 }
 
 interface MatchState {
@@ -281,14 +283,14 @@ export class Game {
       this.bots.push(bot);
     }
 
-    // Reset player
+    // Reset player + configure the chosen weapon (sets mag/reserve from spec)
     this.player.reset(new THREE.Vector3(0, 1.6, 20), 0);
-    this.weapon.ammo = this.weapon.magSize;
-    this.weapon.reserve = 180;
+    this.weapon.configure(cfg.weapon ?? DEFAULT_WEAPON);
 
     this.hud.show();
     this.hud.setHealth(100);
     this.hud.setAmmo(this.weapon.ammo, this.weapon.reserve);
+    this.hud.setWeapon(WEAPONS[this.weapon.weaponId].name);
     this.hud.setScore(0);
     this.hud.setPot(pot, cfg.mode === "duel" ? "1v1" : "5v5");
     this.hud.roundIntro();
@@ -348,7 +350,7 @@ export class Game {
           Telegram.haptic("light");
           if (res.point) this.effects.impact(res.point, res.hitBot != null);
           if (res.hitBot) {
-            const dmg = this.weapon.damage * (res.headshot ? this.weapon.headshotMult : 1);
+            const dmg = res.damage; // aggregate (pellets + distance falloff)
             const died = res.hitBot.damage(dmg);
             this.hud.hitMarker(res.headshot);
             Sound.hitEnemy(res.headshot);
@@ -502,6 +504,7 @@ export class Game {
       new THREE.Vector3(feet[0], feet[1] + EYE, feet[2]),
       youTeam === 0 ? 0 : Math.PI,
     );
+    this.weapon.configure(start.players[seat]?.weapon ?? DEFAULT_WEAPON);
 
     const avatars = new Map<string, RemoteAvatar>();
     const names = new Map<string, string>();
@@ -510,7 +513,7 @@ export class Game {
       names.set(p.id, p.name);
       teams.set(p.id, p.team);
       if (p.id === youId) return;
-      const av = new RemoteAvatar(p.team); // team-colored skin
+      const av = new RemoteAvatar(p.team, p.weapon); // team-colored skin + their gun
       this.scene.add(av.root);
       avatars.set(p.id, av);
     });
@@ -549,7 +552,8 @@ export class Game {
 
     this.hud.show();
     this.hud.setHealth(100);
-    this.hud.setAmmo(this.weapon.magSize, 180);
+    this.hud.setAmmo(this.weapon.ammo, this.weapon.reserve);
+    this.hud.setWeapon(WEAPONS[this.weapon.weaponId].name);
     this.hud.setScore(0);
     this.hud.setPot(start.pot, mode === "duel" ? "1v1" : "5v5");
     if (mode === "elimination") {

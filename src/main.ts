@@ -1,10 +1,8 @@
+import "./buffer-shim"; // MUST be first — installs global Buffer before @ton/core
 import "./styles.css";
-// @ton/core builds BOC payloads via a global `Buffer`, which browsers lack.
-// Polyfill it before anything TON-related loads.
-import { Buffer } from "buffer";
-if (!globalThis.Buffer) globalThis.Buffer = Buffer;
 import { Game, type Mode } from "./game/Game";
 import { SEATS } from "../shared/protocol";
+import { WEAPONS, WEAPON_IDS, DEFAULT_WEAPON, type WeaponId } from "../shared/weapons";
 import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
@@ -108,6 +106,50 @@ function enterMatch(): void {
 stakeSelect.addEventListener("change", updatePlayLabel);
 updatePlayLabel();
 
+// ---- loadout: pick a weapon before the match (persisted) ----
+const WEAPON_ICON: Record<WeaponId, string> = {
+  rifle: "🔫",
+  smg: "💥",
+  sniper: "🎯",
+  shotgun: "🩸",
+};
+function loadWeapon(): WeaponId {
+  const w = localStorage.getItem("tgs-weapon");
+  return WEAPON_IDS.includes(w as WeaponId) ? (w as WeaponId) : DEFAULT_WEAPON;
+}
+let selectedWeapon: WeaponId = loadWeapon();
+const weaponCards = document.getElementById("weapon-cards")!;
+const weaponDetail = document.getElementById("weapon-detail")!;
+
+function renderWeaponDetail(): void {
+  const s = WEAPONS[selectedWeapon];
+  const dps = Math.round(s.damage * s.pellets * s.fireRate);
+  weaponDetail.innerHTML =
+    `<b>${s.name}</b> — ${s.blurb}<br>` +
+    `<span class="wstat">DMG ${s.damage}${s.pellets > 1 ? `×${s.pellets}` : ""}</span>` +
+    `<span class="wstat">RPM ${Math.round(s.fireRate * 60)}</span>` +
+    `<span class="wstat">MAG ${s.magSize}</span>` +
+    `<span class="wstat">DPS ~${dps}</span>`;
+}
+function renderWeaponCards(): void {
+  weaponCards.innerHTML = "";
+  for (const id of WEAPON_IDS) {
+    const s = WEAPONS[id];
+    const btn = document.createElement("button");
+    btn.className = "weapon-card" + (id === selectedWeapon ? " active" : "");
+    btn.innerHTML = `<span class="wc-icon">${WEAPON_ICON[id]}</span><span class="wc-name">${s.name}</span>`;
+    btn.addEventListener("click", () => {
+      selectedWeapon = id;
+      localStorage.setItem("tgs-weapon", id);
+      renderWeaponCards();
+      renderWeaponDetail();
+    });
+    weaponCards.appendChild(btn);
+  }
+}
+renderWeaponCards();
+renderWeaponDetail();
+
 // wallet
 Ton.subscribe((s) => {
   if (s.connected) {
@@ -196,6 +238,7 @@ btnPlay.addEventListener("click", async () => {
     stake,
     Telegram.user()?.name ?? "Player",
     Ton.getState().address ?? undefined,
+    selectedWeapon,
   );
 });
 
@@ -204,7 +247,7 @@ btnPractice.addEventListener("click", () => {
   const stake = parseFloat(stakeSelect.value);
   setNet("");
   enterMatch();
-  game.startMatch({ mode, stake }, (win, payout) => showResult(win, payout));
+  game.startMatch({ mode, stake, weapon: selectedWeapon }, (win, payout) => showResult(win, payout));
 });
 
 // ---- weekly leaderboard ----
@@ -434,7 +477,7 @@ btnCreateRoom.addEventListener("click", async () => {
   setNet("");
   roomNet = net;
   wireRoom(net);
-  net.createRoom(mode, parseFloat(stakeSelect.value), playerName(), Ton.getState().address ?? undefined);
+  net.createRoom(mode, parseFloat(stakeSelect.value), playerName(), Ton.getState().address ?? undefined, selectedWeapon);
 });
 
 btnJoinRoom.addEventListener("click", () => {
@@ -463,7 +506,7 @@ btnJoinConfirm.addEventListener("click", async () => {
   joinError.textContent = "";
   roomNet = net;
   wireRoom(net);
-  net.joinRoom(code, playerName(), Ton.getState().address ?? undefined);
+  net.joinRoom(code, playerName(), Ton.getState().address ?? undefined, selectedWeapon);
 });
 
 btnRoomReady.addEventListener("click", () => {

@@ -1,5 +1,6 @@
 import { Room, type Conn } from "./Room";
 import type { InputMsg, Mode } from "../../shared/protocol";
+import type { WeaponId } from "../../shared/weapons";
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -42,7 +43,14 @@ export class Matchmaker {
     return stake > 0 && this.funding != null && this.escrow.enabled;
   }
 
-  join(conn: Conn, mode: Mode, stake: number, name: string, wallet?: string): void {
+  join(
+    conn: Conn,
+    mode: Mode,
+    stake: number,
+    name: string,
+    wallet?: string,
+    weapon?: WeaponId,
+  ): void {
     const staked = this.staked(stake);
     // A staked seat needs a wallet to deposit from; refuse and let the client
     // prompt a connect rather than silently trapping the player in funding.
@@ -65,7 +73,7 @@ export class Matchmaker {
       }
     }
 
-    room.addHuman(conn, name, wallet);
+    room.addHuman(conn, name, wallet, weapon);
     this.roomOf.set(conn.id, room);
 
     if (room.full) {

@@ -7,6 +7,7 @@ export class HUD {
   private healthNum = document.getElementById("health-num")!;
   private ammoMag = document.getElementById("ammo-mag")!;
   private ammoReserve = document.getElementById("ammo-reserve")!;
+  private weaponName = document.getElementById("weapon-name")!;
   private scoreEl = document.getElementById("score")!;
   private hitmarker = document.getElementById("hitmarker")!;
   private damageFlash = document.getElementById("damage-flash")!;
@@ -121,6 +122,10 @@ export class HUD {
       this.lastReserve = reserve;
       this.ammoReserve.textContent = String(reserve);
     }
+  }
+
+  setWeapon(name: string): void {
+    if (this.weaponName) this.weaponName.textContent = name;
   }
 
   setScore(s: number): void {

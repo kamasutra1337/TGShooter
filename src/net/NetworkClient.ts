@@ -16,6 +16,7 @@ import type {
   FundStatusMsg,
   FundFailedMsg,
 } from "../../shared/protocol";
+import type { WeaponId } from "../../shared/weapons";
 
 // Client-side WebSocket transport. Connects, joins a queue, streams input, and
 // surfaces server messages via callbacks. Knows nothing about rendering.
@@ -142,15 +143,15 @@ export class NetworkClient {
     this.send({ t: "deposited" });
   }
 
-  join(mode: Mode, stake: number, name: string, wallet?: string): void {
-    this.send({ t: "join", mode, stake, name, wallet });
+  join(mode: Mode, stake: number, name: string, wallet?: string, weapon?: WeaponId): void {
+    this.send({ t: "join", mode, stake, name, wallet, weapon });
   }
 
-  createRoom(mode: Mode, stake: number, name: string, wallet?: string): void {
-    this.send({ t: "createRoom", mode, stake, name, wallet });
+  createRoom(mode: Mode, stake: number, name: string, wallet?: string, weapon?: WeaponId): void {
+    this.send({ t: "createRoom", mode, stake, name, wallet, weapon });
   }
-  joinRoom(code: string, name: string, wallet?: string): void {
-    this.send({ t: "joinRoom", code, name, wallet });
+  joinRoom(code: string, name: string, wallet?: string, weapon?: WeaponId): void {
+    this.send({ t: "joinRoom", code, name, wallet, weapon });
   }
   setReady(ready: boolean): void {
     this.send({ t: "ready", ready });

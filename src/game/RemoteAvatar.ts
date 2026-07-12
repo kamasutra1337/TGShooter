@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { EYE } from "../../shared/sim";
+import { DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
 import { buildSoldier, animateSoldier, type SoldierHandles } from "./models/Soldier";
 
 // Visual stand-in for another networked player — a modelled soldier in its team's
@@ -16,9 +17,9 @@ export class RemoteAvatar {
   private alive = true;
   private prev = new THREE.Vector3();
 
-  constructor(team: number) {
+  constructor(team: number, weapon: WeaponId = DEFAULT_WEAPON) {
     this.team = team;
-    this.rig = buildSoldier(team);
+    this.rig = buildSoldier(team, weapon);
     this.hitMats = this.rig.hitMaterials;
     this.root.add(this.rig.group);
   }

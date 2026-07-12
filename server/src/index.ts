@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "node:http";
 import { Address } from "@ton/core";
 import { TonClient } from "@ton/ton";
+import { WEAPON_IDS, type WeaponId } from "../../shared/weapons";
 import { loadEnv } from "./ton/env";
 import { FundingCoordinator } from "./Funding";
 import { Matchmaker } from "./Matchmaker";
@@ -96,14 +97,14 @@ wss.on("connection", (ws: WebSocket) => {
     }
     if (msg.t === "join" && !joined) {
       joined = true;
-      mm.join(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet));
+      mm.join(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon));
     } else if (msg.t === "createRoom" && !joined) {
       joined = true;
-      pr.create(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet));
+      pr.create(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon));
     } else if (msg.t === "joinRoom" && !joined) {
       joined = true;
       const code = String(msg.code ?? "").replace(/\D/g, "").slice(0, 4);
-      pr.join(conn, code, normName(msg.name), validWallet(msg.wallet));
+      pr.join(conn, code, normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon));
     } else if (msg.t === "ready") {
       pr.setReady(id, !!msg.ready);
     } else if (msg.t === "startRoom") {
@@ -155,6 +156,10 @@ function validWallet(v: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function validWeapon(v: unknown): WeaponId | undefined {
+  return (WEAPON_IDS as string[]).includes(v as string) ? (v as WeaponId) : undefined;
 }
 
 httpServer.listen(PORT, () => {

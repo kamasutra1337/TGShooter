@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { WeaponId } from "../../../shared/weapons";
 
 // Soldier built from ROUNDED primitives (capsules / cylinders / spheres) rather
 // than boxes — human-ish silhouette, not blocky. Feet at y=0, ~1.85 m. Two team
@@ -51,7 +52,7 @@ const capsule = (r: number, len: number) => new THREE.CapsuleGeometry(r, len, CA
 const sphere = (r: number) => new THREE.SphereGeometry(r, RAD + 2, RAD);
 const cyl = (rt: number, rb: number, h: number) => new THREE.CylinderGeometry(rt, rb, h, RAD);
 
-export function buildSoldier(team: number): SoldierHandles {
+export function buildSoldier(team: number, weapon: WeaponId = "rifle"): SoldierHandles {
   const s = SCHEMES[team] ?? SCHEMES[1];
   const group = new THREE.Group();
   const rig = new THREE.Group();
@@ -118,8 +119,8 @@ export function buildSoldier(team: number): SoldierHandles {
     rig.add(mesh(sphere(0.07), gear, sx * 0.27, 0.98, 0.36)); // glove
   }
 
-  // held rifle
-  rig.add(buildHeldRifle());
+  // held weapon (varies by loadout)
+  rig.add(buildHeldRifle(weapon));
 
   // ---- neck + head ----
   rig.add(mesh(cyl(0.06, 0.07, 0.1), skin, 0, 1.56, 0));
@@ -148,9 +149,10 @@ export function buildSoldier(team: number): SoldierHandles {
   return { group, rig, legL, legR, hitMaterials, head, walk: 0 };
 }
 
-function buildHeldRifle(): THREE.Group {
+function buildHeldRifle(weapon: WeaponId): THREE.Group {
   const g = new THREE.Group();
   const metal = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.5, metalness: 0.55 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x121317, roughness: 0.6, metalness: 0.3 });
   const wood = new THREE.MeshStandardMaterial({ color: 0x5a3c22, roughness: 0.7 });
   const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0) => {
     const mm = new THREE.Mesh(geo, m);
@@ -159,11 +161,30 @@ function buildHeldRifle(): THREE.Group {
     mm.castShadow = true;
     g.add(mm);
   };
-  put(new THREE.BoxGeometry(0.055, 0.085, 0.36), metal, 0.06, 1.17, 0.5); // receiver
-  put(cyl(0.028, 0.028, 0.22), wood, 0.06, 1.15, 0.72, Math.PI / 2); // handguard
-  put(cyl(0.014, 0.014, 0.3), metal, 0.06, 1.18, 0.96, Math.PI / 2); // barrel
-  put(cyl(0.03, 0.045, 0.16), metal, 0.06, 1.05, 0.5, 0.4); // magazine
-  put(new THREE.BoxGeometry(0.045, 0.08, 0.2), wood, 0.06, 1.15, 0.3); // stock
+  // Shared receiver + stock; barrel/mag/optics vary so enemies read at a glance.
+  put(new THREE.BoxGeometry(0.055, 0.085, 0.34), metal, 0.06, 1.17, 0.5); // receiver
+
+  if (weapon === "smg") {
+    put(cyl(0.012, 0.012, 0.18), metal, 0.06, 1.18, 0.82, Math.PI / 2); // short barrel
+    put(new THREE.BoxGeometry(0.04, 0.14, 0.05), dark, 0.06, 1.02, 0.5); // straight mag
+    put(new THREE.BoxGeometry(0.04, 0.07, 0.14), dark, 0.06, 1.15, 0.3); // stock stub
+  } else if (weapon === "sniper") {
+    put(cyl(0.012, 0.012, 0.5), dark, 0.06, 1.18, 1.02, Math.PI / 2); // long barrel
+    put(cyl(0.028, 0.028, 0.2), dark, 0.06, 1.24, 0.62, Math.PI / 2); // big scope
+    put(cyl(0.03, 0.045, 0.14), metal, 0.06, 1.06, 0.5, 0.4); // mag
+    put(new THREE.BoxGeometry(0.045, 0.08, 0.22), dark, 0.06, 1.15, 0.28); // stock
+  } else if (weapon === "shotgun") {
+    put(cyl(0.024, 0.024, 0.36), dark, 0.06, 1.19, 0.9, Math.PI / 2); // thick barrel
+    put(cyl(0.017, 0.017, 0.34), metal, 0.06, 1.15, 0.89, Math.PI / 2); // mag tube
+    put(new THREE.BoxGeometry(0.05, 0.06, 0.1), wood, 0.06, 1.14, 0.74); // pump
+    put(new THREE.BoxGeometry(0.045, 0.08, 0.22), wood, 0.06, 1.15, 0.28); // wooden stock
+  } else {
+    // rifle (AK)
+    put(cyl(0.028, 0.028, 0.22), wood, 0.06, 1.15, 0.72, Math.PI / 2); // handguard
+    put(cyl(0.014, 0.014, 0.3), metal, 0.06, 1.18, 0.96, Math.PI / 2); // barrel
+    put(cyl(0.03, 0.045, 0.16), metal, 0.06, 1.05, 0.5, 0.4); // banana mag
+    put(new THREE.BoxGeometry(0.045, 0.08, 0.2), wood, 0.06, 1.15, 0.3); // stock
+  }
   return g;
 }
 
