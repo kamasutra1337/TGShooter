@@ -76,9 +76,30 @@ const mm = new Matchmaker(escrow, leaderboard, funding);
 const pr = new PrivateRooms(escrow, leaderboard, funding);
 let nextId = 0;
 
+// Keepalive. Proxies (Railway edge, Telegram WebView) silently drop idle
+// WebSockets, which breaks lobbies where players sit deciding — `ready`/`start`
+// would then vanish with no error. Ping every 25s and terminate dead sockets.
+type Alive = WebSocket & { isAlive?: boolean };
+const heartbeat = setInterval(() => {
+  for (const client of wss.clients) {
+    const ws = client as Alive;
+    if (ws.isAlive === false) {
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 25000);
+wss.on("close", () => clearInterval(heartbeat));
+
 wss.on("connection", (ws: WebSocket) => {
   const id = "p" + ++nextId;
   let joined = false;
+  (ws as Alive).isAlive = true;
+  ws.on("pong", () => {
+    (ws as Alive).isAlive = true;
+  });
 
   const conn: Conn = {
     id,

@@ -591,6 +591,14 @@ function renderRoomPlayers(m: {
   }
   for (let i = m.players.length; i < seats; i++)
     html += `<div class="empty-slot">Empty slot — a bot will fill it</div>`;
+  // Tell the host exactly why they can/can't start (no more silent dead button).
+  if (roomInfo.isHost) {
+    html += m.canStart
+      ? `<div class="room-hint ok">✅ Everyone's ready — press START</div>`
+      : `<div class="room-hint">⏳ Waiting for players to press READY…</div>`;
+  } else {
+    html += `<div class="room-hint">${roomInfo.ready ? "✅ You're ready — waiting for host to start" : "Press READY when you're set"}</div>`;
+  }
   roomPlayers.innerHTML = html;
 }
 
@@ -633,6 +641,13 @@ function wireRoom(net: NetworkClient): void {
       game.startOnline(roomInfo.mode, roomInfo.stake, net2, start, (win, payout) =>
         showResult(win, payout),
       );
+    },
+    onClose: () => {
+      // Dropped WHILE still in the lobby (game hasn't taken the connection).
+      if (roomNet && !roomOverlay.classList.contains("hidden")) {
+        roomError.textContent = "Connection lost — returning to menu";
+        setTimeout(leaveRoomToMenu, 1500);
+      }
     },
   });
 }

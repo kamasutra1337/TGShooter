@@ -1282,6 +1282,16 @@ body,
   font-size: 12px;
   text-align: center;
 }
+.room-hint {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.room-hint.ok {
+  color: var(--accent);
+}
 #btn-room-ready.on {
   border-color: var(--accent);
   color: var(--accent);
