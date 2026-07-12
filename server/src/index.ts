@@ -5,6 +5,7 @@ import { TonClient } from "@ton/ton";
 import { WEAPON_IDS, type WeaponId } from "../../shared/weapons";
 import { MAPS } from "../../shared/arena";
 import { loadEnv } from "./ton/env";
+import { startBot } from "./bot";
 import { FundingCoordinator } from "./Funding";
 import { Matchmaker } from "./Matchmaker";
 import { PrivateRooms } from "./PrivateRooms";
@@ -49,6 +50,15 @@ const funding =
     : null;
 
 const leaderboard = new Leaderboard(LEADERBOARD_FILE);
+
+// Telegram welcome bot (replies to /start with a Play button). Off unless a
+// BOT_TOKEN is configured in the environment.
+if (process.env.BOT_TOKEN) {
+  startBot(
+    process.env.BOT_TOKEN,
+    process.env.MINIAPP_URL ?? "https://kamasutra1337.github.io/TGShooter/",
+  );
+}
 
 // HTTP server: serves the weekly leaderboard and hosts the WebSocket upgrade.
 const httpServer = createServer((req, res) => {
