@@ -35,6 +35,7 @@ export interface WeaponSpec {
   // client cosmetics / recoil pattern
   recoilUp: number; // base view-kick per shot
   recoilSide: number;
+  tracer: number; // tracer/muzzle color (hex)
 }
 
 export const WEAPONS: Record<WeaponId, WeaponSpec> = {
@@ -63,6 +64,7 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     falloffMin: 0.7,
     recoilUp: 0.008,
     recoilSide: 0.0025,
+    tracer: 0xfff1a0,
   },
   // High rate of fire, low per-shot damage, weak past mid range.
   smg: {
@@ -89,6 +91,7 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     falloffMin: 0.45,
     recoilUp: 0.006,
     recoilSide: 0.003,
+    tracer: 0x8affc0,
   },
   // Slow, pinpoint, one-shot headshots. Big penalty for moving/spraying.
   sniper: {
@@ -115,6 +118,7 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     falloffMin: 1,
     recoilUp: 0.03,
     recoilSide: 0.004,
+    tracer: 0xffffff,
   },
   // Multi-pellet blast, brutal at point blank, near-useless past mid range.
   shotgun: {
@@ -141,6 +145,7 @@ export const WEAPONS: Record<WeaponId, WeaponSpec> = {
     falloffMin: 0.15,
     recoilUp: 0.022,
     recoilSide: 0.006,
+    tracer: 0xff9a3d,
   },
 };
 

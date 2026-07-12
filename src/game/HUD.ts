@@ -8,6 +8,8 @@ export class HUD {
   private ammoMag = document.getElementById("ammo-mag")!;
   private ammoReserve = document.getElementById("ammo-reserve")!;
   private weaponName = document.getElementById("weapon-name")!;
+  private reloadBar = document.getElementById("reload-bar")!;
+  private reloadFill = document.getElementById("reload-fill")!;
   private scoreEl = document.getElementById("score")!;
   private hitmarker = document.getElementById("hitmarker")!;
   private damageFlash = document.getElementById("damage-flash")!;
@@ -130,6 +132,15 @@ export class HUD {
 
   setWeapon(name: string): void {
     if (this.weaponName) this.weaponName.textContent = name;
+  }
+
+  setReload(progress: number): void {
+    if (progress > 0) {
+      this.reloadBar.classList.remove("hidden");
+      this.reloadFill.style.width = `${Math.round(progress * 100)}%`;
+    } else {
+      this.reloadBar.classList.add("hidden");
+    }
   }
 
   setTimer(seconds: number): void {

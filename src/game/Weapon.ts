@@ -82,7 +82,13 @@ export class Weapon {
     this.cooldown = 0;
     this.reloading = 0;
     this.bloom = 0;
+    this.tracerMat.color.setHex(this.spec.tracer);
     if (this.camera) this.buildVM();
+  }
+
+  // Reload progress 0..1 (0 = idle/full, 1 = just finished).
+  reloadProgress(): number {
+    return this.reloading > 0 ? 1 - this.reloading / this.reloadTime : 0;
   }
 
   get weaponId(): WeaponId {
@@ -300,8 +306,8 @@ export class Weapon {
     return null;
   }
 
-  showTracer(from: THREE.Vector3, to: THREE.Vector3): void {
-    this.spawnTracer(from, to);
+  showTracer(from: THREE.Vector3, to: THREE.Vector3, color?: number): void {
+    this.spawnTracer(from, to, color);
   }
 
   flashAt(origin: THREE.Vector3): void {
@@ -309,12 +315,14 @@ export class Weapon {
     this.flash.intensity = 6;
   }
 
-  private spawnTracer(from: THREE.Vector3, to: THREE.Vector3): void {
+  private spawnTracer(from: THREE.Vector3, to: THREE.Vector3, color?: number): void {
     const dir = new THREE.Vector3().subVectors(to, from);
     const len = dir.length();
     if (len < 0.1) return;
     const geo = new THREE.CylinderGeometry(0.02, 0.02, len, 6, 1, true);
-    const mesh = new THREE.Mesh(geo, this.tracerMat.clone());
+    const mat = this.tracerMat.clone();
+    if (color !== undefined) mat.color.setHex(color);
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.position.copy(from).addScaledVector(dir, 0.5);
     mesh.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),

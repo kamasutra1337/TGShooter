@@ -20,12 +20,39 @@ const MAX_PARTS = 160;
 const SPARK_GEO = new THREE.SphereGeometry(1, 6, 5);
 const SMOKE_GEO = new THREE.PlaneGeometry(1, 1);
 
+const DECAL_GEO = new THREE.CircleGeometry(0.09, 8);
+const MAX_DECALS = 44;
+
 export class Effects {
   private scene: THREE.Scene;
   private parts: Part[] = [];
+  private decals: { mesh: THREE.Mesh; life: number }[] = [];
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+  }
+
+  // Persistent scorch mark from a bullet hitting a surface (FIFO-capped).
+  decal(point: THREE.Vector3, normal?: THREE.Vector3): void {
+    const mesh = new THREE.Mesh(
+      DECAL_GEO,
+      new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.75, depthWrite: false }),
+    );
+    mesh.position.copy(point);
+    if (normal && normal.lengthSq() > 0.01) {
+      mesh.position.addScaledVector(normal, 0.02); // lift off the surface
+      mesh.lookAt(point.clone().add(normal));
+    } else {
+      mesh.position.y += 0.02;
+      mesh.rotation.x = -Math.PI / 2;
+    }
+    mesh.scale.setScalar(0.7 + Math.random() * 0.6);
+    this.scene.add(mesh);
+    this.decals.push({ mesh, life: 8 });
+    while (this.decals.length > MAX_DECALS) {
+      const old = this.decals.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
   }
 
   // Bullet impact: dust/sparks on walls, a red puff on flesh.
@@ -207,5 +234,21 @@ export class Effects {
         this.parts.splice(i, 1);
       }
     }
+    // decals: fade over the last 2s of life
+    for (let i = this.decals.length - 1; i >= 0; i--) {
+      const d = this.decals[i];
+      d.life -= dt;
+      if (d.life < 2) (d.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, d.life / 2) * 0.75;
+      if (d.life <= 0) {
+        this.scene.remove(d.mesh);
+        (d.mesh.material as THREE.Material).dispose();
+        this.decals.splice(i, 1);
+      }
+    }
+  }
+
+  clearDecals(): void {
+    for (const d of this.decals) this.scene.remove(d.mesh);
+    this.decals = [];
   }
 }

@@ -245,13 +245,33 @@ export class Game {
     return true;
   }
 
+  private hemiLight!: THREE.HemisphereLight;
+  private ambientLight!: THREE.AmbientLight;
+  private sunLight!: THREE.DirectionalLight;
+
+  // Apply a time-of-day theme (sky, fog, light tints). Called each match.
+  applyTheme(t: ArenaTheme): void {
+    this.scene.background = makeSkyTexture(t.sky);
+    (this.scene.fog as THREE.Fog).color.setHex(t.fog);
+    this.hemiLight.color.setHex(t.hemiSky);
+    this.hemiLight.groundColor.setHex(t.hemiGround);
+    this.hemiLight.intensity = t.hemiInt;
+    this.ambientLight.color.setHex(t.ambient);
+    this.ambientLight.intensity = t.ambientInt;
+    this.sunLight.color.setHex(t.sun);
+    this.sunLight.intensity = t.sunInt;
+  }
+
   private setupLights(): void {
     // Ambient sky/ground bounce
-    this.scene.add(new THREE.HemisphereLight(0xaec6ff, 0x2b3040, 1.15));
-    this.scene.add(new THREE.AmbientLight(0x3a4356, 0.3));
+    this.hemiLight = new THREE.HemisphereLight(0xaec6ff, 0x2b3040, 1.15);
+    this.ambientLight = new THREE.AmbientLight(0x3a4356, 0.3);
+    this.scene.add(this.hemiLight);
+    this.scene.add(this.ambientLight);
 
     // Key light (sun) — warm, casts soft shadows
     const sun = new THREE.DirectionalLight(0xfff2df, 2.5);
+    this.sunLight = sun;
     sun.position.set(24, 42, 16);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -335,6 +355,8 @@ export class Game {
     this.player.reset(new THREE.Vector3(0, 1.6, 20), 0);
     this.weapon.configure(cfg.weapon ?? DEFAULT_WEAPON);
     this.resetStats();
+    this.effects.clearDecals();
+    this.applyTheme(THEMES[Math.floor(Math.random() * THEMES.length)]);
 
     this.hud.show();
     this.hud.setHealth(100);
@@ -380,6 +402,7 @@ export class Game {
     else this.offlineFrame(dt);
 
     this.updateAdsZoom(dt);
+    this.hud.setReload(this.weapon.reloadProgress());
     this.effects.update(dt, this.player.camera);
     this.hud.update(dt);
     this.input.endFrame();
@@ -411,7 +434,10 @@ export class Game {
           Sound.shot();
           this.effects.muzzleSmoke(this.weapon.muzzleWorld());
           Telegram.haptic("light");
-          if (res.point) this.effects.impact(res.point, res.hitBot != null && this.blood);
+          if (res.point) {
+            this.effects.impact(res.point, res.hitBot != null && this.blood);
+            if (!res.hitBot) this.effects.decal(res.point); // scorch mark on the surface
+          }
           if (res.hitBot) {
             this.mstats.hits++;
             this.mstats.damage += res.damage;
@@ -555,6 +581,13 @@ export class Game {
     this.net = net;
     this.match = null;
     this.resetStats();
+    this.effects.clearDecals();
+    // Theme derived from the player set so everyone in the match sees the same.
+    const seed = start.players.reduce(
+      (a, p) => a + [...p.id].reduce((x, c) => x + c.charCodeAt(0), 0),
+      0,
+    );
+    this.applyTheme(THEMES[seed % THEMES.length]);
 
     // clear any offline bots
     for (const b of this.bots) this.scene.remove(b.root);
@@ -853,12 +886,22 @@ export class Game {
     if (!o) return;
     const to = new THREE.Vector3(m.hx, m.hy, m.hz);
     this.effects.impact(to, false);
+    // decal only on surfaces (no player within ~1.3m of the impact)
+    let nearPlayer = false;
+    for (const r of o.roster.values()) {
+      if (Math.hypot(r.x - to.x, r.z - to.z) < 1.3) {
+        nearPlayer = true;
+        break;
+      }
+    }
+    if (!nearPlayer) this.effects.decal(to);
     if (m.by === o.youId) {
       this.mstats.shots++;
       this.lastShotImpact.copy(to); // for the damage number on the next hit
       this.weapon.showTracer(this.weapon.muzzleWorld(), to);
     } else {
-      this.weapon.showTracer(new THREE.Vector3(m.ox, m.oy, m.oz), to);
+      const col = WEAPONS[o.weapons.get(m.by) ?? DEFAULT_WEAPON].tracer;
+      this.weapon.showTracer(new THREE.Vector3(m.ox, m.oy, m.oz), to, col);
       this.weapon.flashAt(new THREE.Vector3(m.ox, m.oy, m.oz));
     }
   }
@@ -909,18 +952,41 @@ export class Game {
 }
 
 // Vertical gradient sky (dark top → lighter horizon), as a background texture.
-function makeSkyTexture(): THREE.Texture {
+function makeSkyTexture(stops: [string, string, string] = ["#0a1122", "#131a2c", "#232c42"]): THREE.Texture {
   const c = document.createElement("canvas");
   c.width = 4;
   c.height = 256;
   const ctx = c.getContext("2d")!;
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, "#0a1122");
-  g.addColorStop(0.55, "#131a2c");
-  g.addColorStop(1, "#232c42");
+  g.addColorStop(0, stops[0]);
+  g.addColorStop(0.55, stops[1]);
+  g.addColorStop(1, stops[2]);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 4, 256);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+// Time-of-day themes: sky gradient, fog, hemi/ambient/sun tint + intensity.
+export interface ArenaTheme {
+  sky: [string, string, string];
+  fog: number;
+  hemiSky: number;
+  hemiGround: number;
+  hemiInt: number;
+  ambient: number;
+  ambientInt: number;
+  sun: number;
+  sunInt: number;
+}
+export const THEMES: ArenaTheme[] = [
+  // day (default)
+  { sky: ["#0a1122", "#131a2c", "#232c42"], fog: 0x141b2e, hemiSky: 0xaec6ff, hemiGround: 0x2b3040, hemiInt: 1.15, ambient: 0x3a4356, ambientInt: 0.3, sun: 0xfff2df, sunInt: 2.5 },
+  // dusk (warm)
+  { sky: ["#2a1526", "#4a2436", "#8a4a3a"], fog: 0x3a2230, hemiSky: 0xffb27a, hemiGround: 0x2a1a24, hemiInt: 1.0, ambient: 0x4a2e34, ambientInt: 0.32, sun: 0xff9a5a, sunInt: 2.3 },
+  // night (cool + dim)
+  { sky: ["#05070f", "#0a0e1a", "#101528"], fog: 0x080b16, hemiSky: 0x6a86c0, hemiGround: 0x14161f, hemiInt: 0.85, ambient: 0x232a3a, ambientInt: 0.28, sun: 0xbcd0ff, sunInt: 1.5 },
+  // dawn (pink)
+  { sky: ["#1a1030", "#3a2450", "#c07a8a"], fog: 0x322036, hemiSky: 0xffc0d0, hemiGround: 0x2a2036, hemiInt: 1.05, ambient: 0x3e3048, ambientInt: 0.32, sun: 0xffd0c0, sunInt: 2.2 },
+];
