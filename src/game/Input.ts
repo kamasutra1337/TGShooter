@@ -35,6 +35,14 @@ export class Input {
 
   sensitivity = 0.0022;
   touchSensitivity = 0.006;
+  private readonly baseSens = 0.0022;
+  private readonly baseTouchSens = 0.006;
+
+  // Aim multiplier from settings (1 = default).
+  setSensitivity(mult: number): void {
+    this.sensitivity = this.baseSens * mult;
+    this.touchSensitivity = this.baseTouchSens * mult;
+  }
 
   private keys = new Set<string>();
   private pointerLocked = false;

@@ -82,6 +82,25 @@ export class Game {
   private grenades: Grenades;
   private minimap: Minimap;
   private baseFov = 78;
+  private dmgNumbers = true;
+  private blood = true;
+
+  setFov(deg: number): void {
+    this.baseFov = deg;
+    if (!this.input.state.ads) {
+      this.player.camera.fov = deg;
+      this.player.camera.updateProjectionMatrix();
+    }
+  }
+  setDmgNumbers(on: boolean): void {
+    this.dmgNumbers = on;
+  }
+  setBlood(on: boolean): void {
+    this.blood = on;
+  }
+  setSensitivity(mult: number): void {
+    this.input.setSensitivity(mult);
+  }
   private input: Input;
   private bots: Bot[] = [];
   private clock = new THREE.Clock();
@@ -370,7 +389,7 @@ export class Game {
           Sound.shot();
           this.effects.muzzleSmoke(this.weapon.muzzleWorld());
           Telegram.haptic("light");
-          if (res.point) this.effects.impact(res.point, res.hitBot != null);
+          if (res.point) this.effects.impact(res.point, res.hitBot != null && this.blood);
           if (res.hitBot) {
             const dmg = res.damage; // aggregate (pellets + distance falloff)
             const died = res.hitBot.damage(dmg);
@@ -763,7 +782,7 @@ export class Game {
     if (m.by === o.youId) {
       this.hud.hitMarker(m.headshot);
       this.showDamage(this.lastShotImpact, m.damage, m.headshot);
-      this.effects.impact(this.lastShotImpact, true); // red flesh puff
+      this.effects.impact(this.lastShotImpact, this.blood); // red flesh puff (if blood on)
       Sound.hitEnemy(m.headshot);
       Telegram.haptic("light");
       if (m.killed) {
@@ -817,6 +836,7 @@ export class Game {
   }
 
   private showDamage(world: THREE.Vector3, amount: number, headshot: boolean): void {
+    if (!this.dmgNumbers) return;
     const ndc = world.clone().project(this.player.camera);
     if (ndc.z > 1) return; // behind the camera
     const px = (ndc.x * 0.5 + 0.5) * window.innerWidth;

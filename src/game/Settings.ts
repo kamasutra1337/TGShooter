@@ -6,6 +6,12 @@ export interface GameSettings {
   color: string;
   sound: boolean;
   graphics: "high" | "lite";
+  sensitivity: number; // 0.4..2 aim multiplier
+  fov: number; // 65..100 degrees
+  sfxVol: number; // 0..1
+  musicVol: number; // 0..1
+  dmgNumbers: boolean;
+  blood: boolean;
 }
 
 const KEY = "tgshooter.settings";
@@ -14,6 +20,12 @@ const DEFAULT: GameSettings = {
   color: "#37e0a6",
   sound: true,
   graphics: "high",
+  sensitivity: 1,
+  fov: 78,
+  sfxVol: 0.5,
+  musicVol: 0.35,
+  dmgNumbers: true,
+  blood: true,
 };
 
 export function loadSettings(): GameSettings {

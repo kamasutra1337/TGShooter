@@ -174,6 +174,38 @@
               <button class="gfx-opt" data-gfx="lite">Lite</button>
             </div>
           </div>
+          <div class="set-row">
+            <span>Sensitivity</span>
+            <input type="range" id="set-sens" min="0.4" max="2" step="0.05" value="1" />
+            <span id="set-sens-val" class="set-val">1.0×</span>
+          </div>
+          <div class="set-row">
+            <span>Field of view</span>
+            <input type="range" id="set-fov" min="65" max="100" step="1" value="78" />
+            <span id="set-fov-val" class="set-val">78</span>
+          </div>
+          <div class="set-row">
+            <span>SFX volume</span>
+            <input type="range" id="set-sfx" min="0" max="1" step="0.05" value="0.5" />
+          </div>
+          <div class="set-row">
+            <span>Music</span>
+            <input type="range" id="set-music" min="0" max="1" step="0.05" value="0.35" />
+          </div>
+          <div class="set-row">
+            <span>Damage numbers</span>
+            <div class="seg">
+              <button class="dmg-opt" data-dmg="on">On</button>
+              <button class="dmg-opt" data-dmg="off">Off</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span>Blood FX</span>
+            <div class="seg">
+              <button class="blood-opt" data-blood="on">On</button>
+              <button class="blood-opt" data-blood="off">Off</button>
+            </div>
+          </div>
           <div class="swatches" id="ch-swatches"></div>
           <div class="ch-preview">
             <div id="ch-preview-box">

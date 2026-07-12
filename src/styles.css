@@ -750,6 +750,22 @@ body,
   color: var(--accent);
 }
 
+/* settings sliders */
+.set-row input[type="range"] {
+  flex: 1;
+  margin: 0 10px;
+  accent-color: var(--accent);
+  height: 4px;
+}
+.set-val {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+}
+
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {
   display: flex;

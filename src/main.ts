@@ -9,6 +9,7 @@ import { NetworkClient } from "./net/NetworkClient";
 import { playIntro } from "./game/Intro";
 import { loadSettings, saveSettings, applyCrosshair, SWATCHES } from "./game/Settings";
 import { Sound } from "./game/Audio";
+import { Music } from "./game/Music";
 
 // Authoritative server URL. Override with VITE_SERVER_URL for production
 // (wss://your-host). Defaults to the current host on the dev port so a phone on
@@ -21,7 +22,10 @@ Telegram.init();
 
 // Web Audio needs a user gesture — unlock on the first interaction, and add a
 // soft UI tick to menu/panel buttons.
-window.addEventListener("pointerdown", () => Sound.unlock());
+window.addEventListener("pointerdown", () => {
+  Sound.unlock();
+  Music.start();
+});
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement)?.closest(".menu-card, .panel-card")) Sound.ui();
 });
@@ -289,6 +293,61 @@ const settingsOverlay = document.getElementById("settings")!;
 const sndOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".snd-opt"));
 const gfxOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".gfx-opt"));
 game.setGraphics(settings.graphics !== "lite");
+// extended settings applied live
+game.setSensitivity(settings.sensitivity);
+game.setFov(settings.fov);
+Sound.setSfxVolume(settings.sfxVol);
+Music.setVolume(settings.musicVol);
+game.setDmgNumbers(settings.dmgNumbers);
+game.setBlood(settings.blood);
+
+const setSens = document.getElementById("set-sens") as HTMLInputElement;
+const setSensVal = document.getElementById("set-sens-val")!;
+const setFovEl = document.getElementById("set-fov") as HTMLInputElement;
+const setFovVal = document.getElementById("set-fov-val")!;
+const setSfx = document.getElementById("set-sfx") as HTMLInputElement;
+const setMusic = document.getElementById("set-music") as HTMLInputElement;
+const dmgOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".dmg-opt"));
+const bloodOpts = Array.from(document.querySelectorAll<HTMLButtonElement>(".blood-opt"));
+
+setSens.addEventListener("input", () => {
+  settings.sensitivity = parseFloat(setSens.value);
+  game.setSensitivity(settings.sensitivity);
+  setSensVal.textContent = settings.sensitivity.toFixed(2) + "×";
+  saveSettings(settings);
+});
+setFovEl.addEventListener("input", () => {
+  settings.fov = parseInt(setFovEl.value);
+  game.setFov(settings.fov);
+  setFovVal.textContent = String(settings.fov);
+  saveSettings(settings);
+});
+setSfx.addEventListener("input", () => {
+  settings.sfxVol = parseFloat(setSfx.value);
+  Sound.setSfxVolume(settings.sfxVol);
+  Sound.ui();
+  saveSettings(settings);
+});
+setMusic.addEventListener("input", () => {
+  settings.musicVol = parseFloat(setMusic.value);
+  Music.setVolume(settings.musicVol);
+  saveSettings(settings);
+});
+for (const b of dmgOpts)
+  b.addEventListener("click", () => {
+    settings.dmgNumbers = b.dataset.dmg === "on";
+    game.setDmgNumbers(settings.dmgNumbers);
+    saveSettings(settings);
+    refreshSettingsUI();
+  });
+for (const b of bloodOpts)
+  b.addEventListener("click", () => {
+    settings.blood = b.dataset.blood === "on";
+    game.setBlood(settings.blood);
+    saveSettings(settings);
+    refreshSettingsUI();
+  });
+
 const btnSettings = document.getElementById("btn-settings") as HTMLButtonElement;
 const btnSettingsClose = document.getElementById("btn-settings-close") as HTMLButtonElement;
 const chStyleBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".ch-style"));
@@ -314,6 +373,14 @@ function refreshSettingsUI(): void {
     b.classList.toggle("active", (b.dataset.snd === "on") === settings.sound),
   );
   gfxOpts.forEach((b) => b.classList.toggle("active", b.dataset.gfx === settings.graphics));
+  setSens.value = String(settings.sensitivity);
+  setSensVal.textContent = settings.sensitivity.toFixed(2) + "×";
+  setFovEl.value = String(settings.fov);
+  setFovVal.textContent = String(settings.fov);
+  setSfx.value = String(settings.sfxVol);
+  setMusic.value = String(settings.musicVol);
+  dmgOpts.forEach((b) => b.classList.toggle("active", (b.dataset.dmg === "on") === settings.dmgNumbers));
+  bloodOpts.forEach((b) => b.classList.toggle("active", (b.dataset.blood === "on") === settings.blood));
   applyCrosshair(settings);
 }
 

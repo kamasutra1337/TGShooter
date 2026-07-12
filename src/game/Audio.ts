@@ -8,13 +8,21 @@ class SoundEngine {
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private _muted = false;
+  private _sfxVol = 0.5;
 
   get muted(): boolean {
     return this._muted;
   }
   setMuted(m: boolean): void {
     this._muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : 0.5;
+    this.applyGain();
+  }
+  setSfxVolume(v: number): void {
+    this._sfxVol = Math.max(0, Math.min(1, v));
+    this.applyGain();
+  }
+  private applyGain(): void {
+    if (this.master) this.master.gain.value = this._muted ? 0 : this._sfxVol;
   }
 
   // Create/resume the context (must be triggered by a user gesture).
@@ -26,7 +34,7 @@ class SoundEngine {
           (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         this.ctx = new Ctx();
         this.master = this.ctx.createGain();
-        this.master.gain.value = this._muted ? 0 : 0.5;
+        this.master.gain.value = this._muted ? 0 : this._sfxVol;
         this.master.connect(this.ctx.destination);
         this.noise = this.makeNoise(this.ctx);
       }
