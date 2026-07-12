@@ -109,15 +109,22 @@ export function buildSoldier(team: number, weapon: WeaponId = "rifle"): SoldierH
   // backpack (rounded)
   rig.add(mesh(capsule(0.16, 0.28), gear, 0, 1.32, -0.24));
 
-  // ---- shoulders + arms (capsules, forward as if holding a rifle) ----
+  // ---- arms holding the weapon at the ready (both hands ON the gun) ----
   for (const sx of [-1, 1]) {
-    rig.add(mesh(sphere(0.12), uniform, sx * 0.3, 1.44, 0.02)); // shoulder
-    rig.add(mesh(capsule(0.08, 0.24), uniform, sx * 0.32, 1.3, 0.04)); // upper arm
-    const fore = mesh(capsule(0.07, 0.24), uniformDark, sx * 0.3, 1.1, 0.2); // forearm
-    fore.rotation.x = -0.95;
-    rig.add(fore);
-    rig.add(mesh(sphere(0.07), gear, sx * 0.27, 0.98, 0.36)); // glove
+    rig.add(mesh(sphere(0.12), uniform, sx * 0.29, 1.45, 0.02)); // shoulder
+    const upper = mesh(capsule(0.075, 0.2), uniform, sx * 0.27, 1.33, 0.09);
+    upper.rotation.x = -0.55;
+    rig.add(upper);
   }
+  // right forearm reaches the pistol grip, left forearm the foregrip
+  const rFore = mesh(capsule(0.065, 0.2), uniformDark, 0.16, 1.17, 0.34);
+  rFore.rotation.set(-1.15, 0, -0.15);
+  rig.add(rFore);
+  const lFore = mesh(capsule(0.065, 0.24), uniformDark, -0.05, 1.18, 0.52);
+  lFore.rotation.set(-1.3, 0, 0.28);
+  rig.add(lFore);
+  rig.add(mesh(sphere(0.058), gear, 0.14, 1.08, 0.46)); // right glove on grip
+  rig.add(mesh(sphere(0.058), gear, 0.03, 1.12, 0.66)); // left glove on foregrip
 
   // held weapon (varies by loadout)
   rig.add(buildHeldRifle(weapon));
@@ -151,9 +158,10 @@ export function buildSoldier(team: number, weapon: WeaponId = "rifle"): SoldierH
 
 function buildHeldRifle(weapon: WeaponId): THREE.Group {
   const g = new THREE.Group();
-  const metal = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.5, metalness: 0.55 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x121317, roughness: 0.6, metalness: 0.3 });
-  const wood = new THREE.MeshStandardMaterial({ color: 0x5a3c22, roughness: 0.7 });
+  // Lighter gunmetal so the weapon reads against dark/night maps.
+  const metal = new THREE.MeshStandardMaterial({ color: 0x565b66, roughness: 0.42, metalness: 0.7 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3a3e46, roughness: 0.5, metalness: 0.5 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.65 });
   const put = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0) => {
     const mm = new THREE.Mesh(geo, m);
     mm.position.set(x, y, z);

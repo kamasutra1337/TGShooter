@@ -501,6 +501,7 @@ export class Game {
     else this.offlineFrame(dt);
 
     this.updateAdsZoom(dt);
+    this.weapon.setMove(Math.hypot(this.player.velocity.x, this.player.velocity.z));
     this.applyJuice(dt);
     this.hud.setReload(this.weapon.reloadProgress());
     this.effects.update(dt, this.player.camera);
@@ -933,12 +934,13 @@ export class Game {
       } else {
         let av = o.avatars.get(s.id);
         if (!av) {
-          av = new RemoteAvatar(s.team);
+          av = new RemoteAvatar(s.team, o.weapons.get(s.id));
           this.scene.add(av.root);
           o.avatars.set(s.id, av);
           o.teams.set(s.id, s.team);
         }
         av.setTarget(s.x, s.y, s.z, s.yaw, s.alive);
+        av.setAiming(s.ads); // scope reticle over head when an enemy sniper aims
       }
     }
 

@@ -577,6 +577,7 @@ export class Room {
       ammo: p.player.ammo,
       reserve: p.player.reserve,
       team: p.team,
+      ads: !!p.player.ads,
     }));
     for (const p of this.parts) {
       p.conn?.send({

@@ -39,7 +39,14 @@ export class Weapon {
 
   private cooldown = 0;
   private reloading = 0;
+  private swayT = 0; // idle/walk sway clock
+  private moveAmt = 0; // 0..1 how fast the player is moving (drives the bob)
   private bloom = 0; // random-dispersion accumulator (grows per shot, recovers)
+
+  // Called each frame with the player's ground speed so the gun bobs when moving.
+  setMove(speed: number): void {
+    this.moveAmt = Math.max(0, Math.min(1, speed / 7));
+  }
   private sprayIndex = 0; // shot index within the current spray (recoil pattern)
   private sinceShot = 99; // seconds since last shot (resets the spray)
   private raycaster = new THREE.Raycaster();
@@ -192,15 +199,19 @@ export class Weapon {
         this.reloading > 0
           ? Math.sin(Math.PI * (1 - this.reloading / this.reloadTime))
           : 0;
+      // Idle breathing + walk bob — makes the gun feel alive, not glued to screen.
+      this.swayT += dt * (2.4 + this.moveAmt * 7);
+      const swayX = Math.sin(this.swayT * 0.5) * (0.003 + this.moveAmt * 0.016);
+      const bob = Math.abs(Math.sin(this.swayT)) * this.moveAmt * 0.02 + Math.sin(this.swayT * 0.5) * 0.0025;
       this.viewmodel.position.set(
-        VM_BASE.x,
-        VM_BASE.y - reloadPhase * 0.16 - this.vmKick * 0.01,
+        VM_BASE.x + swayX,
+        VM_BASE.y - reloadPhase * 0.16 - this.vmKick * 0.01 - bob,
         VM_BASE.z + this.vmKick * 0.06,
       );
       this.viewmodel.rotation.set(
-        0.02 + this.vmKick * 0.18,
-        0.06,
-        reloadPhase * 0.5,
+        0.02 + this.vmKick * 0.18 + bob * 0.6,
+        0.06 + swayX * 0.6,
+        reloadPhase * 0.5 + swayX * 1.2,
       );
     }
 

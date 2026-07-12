@@ -16,12 +16,58 @@ export class RemoteAvatar {
   private targetYaw = 0;
   private alive = true;
   private prev = new THREE.Vector3();
+  private weapon: WeaponId;
+  private scopeSprite: THREE.Sprite | null = null;
 
   constructor(team: number, weapon: WeaponId = DEFAULT_WEAPON) {
     this.team = team;
+    this.weapon = weapon;
     this.rig = buildSoldier(team, weapon);
     this.hitMats = this.rig.hitMaterials;
     this.root.add(this.rig.group);
+    if (weapon === "sniper") this.addScopeSprite();
+  }
+
+  // A floating scope reticle over the head, shown when a sniper is aiming.
+  private addScopeSprite(): void {
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext("2d")!;
+    ctx.strokeStyle = "#ff3b3b";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(32, 32, 22, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(32, 4);
+    ctx.lineTo(32, 20);
+    ctx.moveTo(32, 44);
+    ctx.lineTo(32, 60);
+    ctx.moveTo(4, 32);
+    ctx.lineTo(20, 32);
+    ctx.moveTo(44, 32);
+    ctx.lineTo(60, 32);
+    ctx.stroke();
+    ctx.fillStyle = "#ff3b3b";
+    ctx.beginPath();
+    ctx.arc(32, 32, 3, 0, Math.PI * 2);
+    ctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.6, 0.6, 0.6);
+    sprite.position.set(0, 2.5, 0); // above the head
+    sprite.visible = false;
+    sprite.renderOrder = 999;
+    this.root.add(sprite);
+    this.scopeSprite = sprite;
+  }
+
+  // Show/hide the "aiming" reticle (only meaningful for snipers).
+  setAiming(ads: boolean): void {
+    if (this.scopeSprite) this.scopeSprite.visible = ads && this.alive && this.weapon === "sniper";
   }
 
   // Brief red flash when shot (visual hit feedback).

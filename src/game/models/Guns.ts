@@ -58,6 +58,15 @@ function buildSmg(): GunHandles {
   add(new THREE.BoxGeometry(0.045, 0.11, 0.055), dark, 0, -0.1, 0.05, 0.3); // grip
   add(new THREE.BoxGeometry(0.045, 0.16, 0.05), poly, 0, -0.14, -0.08); // straight box mag
   add(new THREE.BoxGeometry(0.04, 0.03, 0.02), metal, 0.035, 0.02, 0.0); // charging handle
+  // red-dot optic on a short rail
+  add(new THREE.BoxGeometry(0.05, 0.02, 0.14), metal, 0, 0.06, -0.02);
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.06), dark, 0, 0.095, -0.04);
+  const dot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.007, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff3030 }),
+  );
+  dot.position.set(0, 0.095, 0.0);
+  g.add(dot);
   return finish(g, -0.46);
 }
 

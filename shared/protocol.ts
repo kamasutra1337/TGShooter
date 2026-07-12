@@ -122,6 +122,7 @@ export interface PlayerSnap {
   ammo: number;
   reserve: number;
   team: number;
+  ads: boolean; // aiming down sights (for the "enemy is aiming" indicator)
 }
 
 export interface SnapshotMsg {
