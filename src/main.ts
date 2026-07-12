@@ -197,7 +197,7 @@ refreshMenuMeta();
 
 // ---- community links (edit these to your real channels) ----
 const COMMUNITY = {
-  telegram: "https://t.me/tgshooter", // TODO: your Telegram channel/chat
+  telegram: "https://t.me/ukpepe", // owner's Telegram
   x: "https://x.com/tgshooter", // TODO: your X handle
   game: "https://kamasutra1337.github.io/TGShooter/",
 };
