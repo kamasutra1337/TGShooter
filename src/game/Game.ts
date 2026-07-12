@@ -91,12 +91,61 @@ export class Game {
   private blood = true;
   private mstats = { shots: 0, hits: 0, damage: 0, kills: 0, deaths: 0 };
 
+  // combat juice
+  private streak = 0; // kills without dying (this life)
+  private multiCount = 0; // kills inside the multi-kill window
+  private lastKillT = 0;
+  private firstBlood = false; // per match
+  private shakeAmt = 0; // screen-shake magnitude, decays
+  private lowHp = false;
+  private hbTimer = 0; // heartbeat cadence
+
+  // A kill by the local player: drive multi-kill + streak announcements.
+  private onKill(): void {
+    const now = performance.now();
+    this.multiCount = now - this.lastKillT < 3500 ? this.multiCount + 1 : 1;
+    this.lastKillT = now;
+    this.streak++;
+    if (!this.firstBlood) {
+      this.firstBlood = true;
+      this.hud.announce("FIRST BLOOD", "first");
+      Sound.streak(1);
+      return;
+    }
+    const multi = (
+      { 2: "DOUBLE KILL", 3: "TRIPLE KILL", 4: "MULTI KILL", 5: "MEGA KILL" } as Record<number, string>
+    )[Math.min(this.multiCount, 5)];
+    const spree = (
+      { 3: "KILLING SPREE", 5: "RAMPAGE", 7: "UNSTOPPABLE", 10: "GODLIKE" } as Record<number, string>
+    )[this.streak];
+    if (spree) {
+      this.hud.announce(spree, "streak");
+      Sound.streak(this.streak);
+    } else if (multi) {
+      this.hud.announce(multi, "multi");
+      Sound.streak(this.multiCount);
+    }
+  }
+
+  private resetStreak(): void {
+    this.streak = 0;
+    this.multiCount = 0;
+  }
+
+  addShake(a: number): void {
+    this.shakeAmt = Math.min(this.shakeAmt + a, 1.2);
+  }
+
   getMatchStats(): { shots: number; hits: number; damage: number; kills: number; deaths: number; accuracy: number } {
     const s = this.mstats;
     return { ...s, accuracy: s.shots > 0 ? Math.round((s.hits / s.shots) * 100) : 0 };
   }
   private resetStats(): void {
     this.mstats = { shots: 0, hits: 0, damage: 0, kills: 0, deaths: 0 };
+    this.resetStreak();
+    this.firstBlood = false;
+    this.lowHp = false;
+    this.hud.setLowHp(false);
   }
 
   // Top-scoring player this match (online only). Returns { name, kills, you }.
@@ -418,12 +467,41 @@ export class Game {
     }
   }
 
+  // Per-frame combat juice: screen shake decay/apply + low-health pulse & beat.
+  private applyJuice(dt: number): void {
+    // screen shake — offset the camera this frame (syncCamera resets it next).
+    if (this.shakeAmt > 0.001) {
+      const s = this.shakeAmt * 0.16;
+      this.player.camera.position.x += (Math.random() - 0.5) * s;
+      this.player.camera.position.y += (Math.random() - 0.5) * s;
+      this.player.camera.position.z += (Math.random() - 0.5) * s;
+      this.shakeAmt = Math.max(0, this.shakeAmt - dt * 4);
+    }
+    // low-health vignette + heartbeat
+    const inMatch = !!(this.online?.running || this.match?.running);
+    const hp = this.player.health;
+    const low = inMatch && this.player.alive && hp > 0 && hp < 30;
+    if (low !== this.lowHp) {
+      this.lowHp = low;
+      this.hud.setLowHp(low);
+      this.hbTimer = 0;
+    }
+    if (low) {
+      this.hbTimer -= dt;
+      if (this.hbTimer <= 0) {
+        Sound.heartbeat();
+        this.hbTimer = 0.85;
+      }
+    }
+  }
+
   private frame(): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (this.online?.running) this.onlineFrame(dt);
     else this.offlineFrame(dt);
 
     this.updateAdsZoom(dt);
+    this.applyJuice(dt);
     this.hud.setReload(this.weapon.reloadProgress());
     this.effects.update(dt, this.player.camera);
     this.hud.update(dt);
@@ -493,6 +571,7 @@ export class Game {
       if (incoming > 0) {
         this.player.damage(incoming);
         this.hud.damageFlashPulse();
+        this.addShake(0.3);
         Telegram.haptic("heavy");
         Sound.hurt();
         if (!this.player.alive) this.onPlayerDied();
@@ -534,6 +613,7 @@ export class Game {
     const m = this.match;
     if (!m) return;
     m.playerFrags++;
+    this.onKill();
     this.hud.killFeed("You", bot.name, true);
     Telegram.notify("success");
 
@@ -559,6 +639,7 @@ export class Game {
     const m = this.match;
     if (!m) return;
     this.mstats.deaths++;
+    this.resetStreak();
     this.input.clearAds();
     Sound.die();
     this.hud.killFeed("Enemy", "You", true);
@@ -678,7 +759,11 @@ export class Game {
         this.hud.chatMessage(m.name, m.text, cls);
       },
       onNade: (m) => this.grenades.throw(m),
-      onBoom: (m) => this.grenades.boom(m),
+      onBoom: (m) => {
+        this.grenades.boom(m);
+        const d = Math.hypot(m.x - this.player.position.x, m.y - this.player.position.y, m.z - this.player.position.z);
+        this.addShake(Math.max(0, 1 - d / 14)); // closer = harder shake
+      },
       onClose: () => {
         if (this.online?.running) void this.onNetEnd(false, 0);
       },
@@ -833,6 +918,7 @@ export class Game {
         if (wasAlive && !s.alive) {
           Sound.die();
           this.mstats.deaths++;
+          this.resetStreak();
           this.input.clearAds(); // don't respawn stuck in zoom
         }
         if (s.alive) {
@@ -882,6 +968,7 @@ export class Game {
       Telegram.haptic("light");
       if (m.killed) {
         this.mstats.kills++;
+        this.onKill();
         Sound.kill();
         this.hud.killFeed("You", o.names.get(m.target) ?? "Enemy", true, o.weapons.get(m.by));
       }
@@ -895,6 +982,7 @@ export class Game {
     }
     if (m.target === o.youId) {
       this.hud.damageFlashPulse();
+      this.addShake(0.35);
       Sound.hurt();
       Telegram.haptic("heavy");
       // directional damage arrow: where did the attacker fire from?

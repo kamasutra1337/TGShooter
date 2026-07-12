@@ -949,6 +949,79 @@ body,
   display: none;
 }
 
+/* ---- combat juice: kill/streak banner ---- */
+#kill-banner {
+  position: absolute;
+  left: 50%;
+  top: 28%;
+  transform: translate(-50%, -50%) scale(0.6);
+  font-weight: 900;
+  font-size: 34px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 19;
+  white-space: nowrap;
+}
+#kill-banner.kb-show {
+  animation: kbPop 1.4s ease-out forwards;
+}
+.kb-first {
+  color: #ff4d4d;
+}
+.kb-multi {
+  color: #ffd166;
+}
+.kb-streak {
+  color: #37e0a6;
+}
+@keyframes kbPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -55%) scale(1);
+  }
+}
+
+/* ---- combat juice: low-health vignette ---- */
+#lowhp {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 8;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(200, 0, 0, 0.55) 100%);
+  transition: opacity 0.3s ease;
+}
+#lowhp.on {
+  opacity: 1;
+  animation: hpPulse 0.85s ease-in-out infinite;
+}
+@keyframes hpPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .room-weapon {
   font-size: 13px;
   color: var(--muted);

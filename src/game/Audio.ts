@@ -159,6 +159,20 @@ class SoundEngine {
     this.noiseBurst(0.25, 0.4, "highpass", 2200, 0.7, 0.02); // debris crack
   }
 
+  // Rising fanfare for a multi-kill / streak; more notes the bigger the streak.
+  streak(level: number): void {
+    this.unlock();
+    const notes = [523, 659, 784, 988, 1175]; // C E G B D
+    const n = Math.min(2 + Math.floor(level / 2), notes.length);
+    for (let i = 0; i < n; i++) this.tone(notes[i], 0.16, "triangle", 0.3, undefined, i * 0.07);
+  }
+
+  // Two-thump heartbeat for low health.
+  heartbeat(): void {
+    this.tone(60, 0.12, "sine", 0.35, 40);
+    this.tone(55, 0.14, "sine", 0.3, 35, 0.16);
+  }
+
   ui(): void {
     this.tone(880, 0.03, "sine", 0.18);
   }

@@ -22,6 +22,8 @@ export class HUD {
   private countdownEl = document.getElementById("countdown")!;
   private chatFeed = document.getElementById("chat-feed")!;
   private matchTimer = document.getElementById("match-timer")!;
+  private killBanner = document.getElementById("kill-banner")!;
+  private lowhp = document.getElementById("lowhp")!;
   private scoreboard = document.getElementById("scoreboard")!;
   private dmgDir = document.getElementById("dmg-dir")!;
 
@@ -141,6 +143,23 @@ export class HUD {
     } else {
       this.reloadBar.classList.add("hidden");
     }
+  }
+
+  // Big centred announcement (multi-kills, streaks). cls: "multi" | "streak" | "first".
+  announce(text: string, cls: string): void {
+    this.killBanner.textContent = text;
+    this.killBanner.className = `kb-${cls}`; // also drops "hidden"
+    // restart the pop animation even on rapid repeats
+    void this.killBanner.offsetWidth;
+    this.killBanner.classList.add("kb-show");
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => this.killBanner.classList.add("hidden"), 1400);
+  }
+  private bannerTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Red low-health vignette (pulses via CSS).
+  setLowHp(on: boolean): void {
+    this.lowhp.classList.toggle("on", on);
   }
 
   setTimer(seconds: number): void {
