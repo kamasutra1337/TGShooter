@@ -17,6 +17,7 @@ export class HUD {
   private teamMine = document.getElementById("team-mine")!;
   private teamFoe = document.getElementById("team-foe")!;
   private countdownEl = document.getElementById("countdown")!;
+  private chatFeed = document.getElementById("chat-feed")!;
 
   private lastHealth = -1;
   private lastMag = -1;
@@ -27,12 +28,23 @@ export class HUD {
   show(): void {
     this.root.classList.remove("hidden");
     this.killfeed.innerHTML = "";
+    this.chatFeed.innerHTML = "";
     this.teamStatus.classList.add("hidden");
     this.countdownEl.classList.add("hidden");
     this.setSpectate(null);
   }
   hide(): void {
     this.root.classList.add("hidden");
+  }
+
+  // In-match chat line (fades). cls: "me" | "blue" | "red" | "".
+  chatMessage(name: string, text: string, cls: string): void {
+    const el = document.createElement("div");
+    el.className = "chat-line";
+    el.innerHTML = `<span class="cl-name ${cls}">${esc(name)}</span>${esc(text)}`;
+    this.chatFeed.appendChild(el);
+    while (this.chatFeed.children.length > 6) this.chatFeed.firstChild?.remove();
+    setTimeout(() => el.remove(), 8000);
   }
 
   killFeed(killer: string, victim: string, mine: boolean): void {

@@ -63,8 +63,20 @@ export class Input {
   }
 
   // ---------------- desktop ----------------
+  private typing(): boolean {
+    const a = document.activeElement;
+    return a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
+  }
+
+  clearKeys(): void {
+    this.keys.clear();
+    this.state.moveX = 0;
+    this.state.moveY = 0;
+  }
+
   private attachDesktop(): void {
     window.addEventListener("keydown", (e) => {
+      if (this.typing()) return; // don't move the player while typing in chat
       this.keys.add(e.code);
       if (e.code === "Space") this.state.jumpQueued = true;
       if (e.code === "KeyR") this.state.reloadQueued = true;

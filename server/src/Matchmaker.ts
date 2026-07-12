@@ -59,6 +59,10 @@ export class Matchmaker {
     this.roomOf.get(id)?.setInput(id, msg);
   }
 
+  chat(id: string, text: string): void {
+    this.roomOf.get(id)?.chat(id, text);
+  }
+
   leave(id: string): void {
     const room = this.roomOf.get(id);
     if (!room) return;

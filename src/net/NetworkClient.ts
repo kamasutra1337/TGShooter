@@ -11,6 +11,7 @@ import type {
   RoomJoinedMsg,
   RoomStateMsg,
   RoomErrorMsg,
+  ChatEventMsg,
 } from "../../shared/protocol";
 
 // Client-side WebSocket transport. Connects, joins a queue, streams input, and
@@ -25,6 +26,7 @@ export interface NetHandlers {
   onRoomJoined?: (m: RoomJoinedMsg) => void;
   onRoomState?: (m: RoomStateMsg) => void;
   onRoomError?: (m: RoomErrorMsg) => void;
+  onChat?: (m: ChatEventMsg) => void;
   onClose?: () => void;
 }
 
@@ -110,7 +112,15 @@ export class NetworkClient {
       case "roomError":
         this.handlers.onRoomError?.(msg);
         break;
+      case "chatMsg":
+        this.handlers.onChat?.(msg);
+        break;
     }
+  }
+
+  sendChat(text: string): void {
+    const t = text.trim().slice(0, 140);
+    if (t) this.send({ t: "chat", text: t });
   }
 
   join(mode: Mode, stake: number, name: string, wallet?: string): void {

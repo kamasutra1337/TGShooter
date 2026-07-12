@@ -131,6 +131,21 @@ export class PrivateRooms {
     this.lobbyOf.get(id)?.game?.setInput(id, msg);
   }
 
+  chat(id: string, text: string): void {
+    const lobby = this.lobbyOf.get(id);
+    if (!lobby) return;
+    if (lobby.game) {
+      lobby.game.chat(id, text);
+      return;
+    }
+    const m = lobby.members.find((x) => x.conn.id === id);
+    if (!m) return;
+    const clean = text.slice(0, 140).trim();
+    if (!clean) return;
+    const msg = { t: "chatMsg" as const, name: m.name, text: clean, team: 0 };
+    for (const mm of lobby.members) mm.conn.send(msg);
+  }
+
   private canStart(lobby: Lobby): boolean {
     return lobby.members
       .filter((m) => m.conn.id !== lobby.hostId)

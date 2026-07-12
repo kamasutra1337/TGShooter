@@ -166,6 +166,14 @@ export class Room {
     this.snapTimer = setInterval(() => this.broadcastSnap(), 1000 / SNAPSHOT_HZ);
   }
 
+  chat(id: string, text: string): void {
+    const p = this.parts.find((x) => x.player.id === id && x.conn);
+    if (!p) return;
+    const clean = text.slice(0, 140).trim();
+    if (!clean) return;
+    this.broadcast({ t: "chatMsg", name: p.name, text: clean, team: p.team });
+  }
+
   setInput(id: string, msg: InputMsg): void {
     const p = this.parts.find((x) => x.player.id === id);
     if (!p) return;

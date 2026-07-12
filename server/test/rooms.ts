@@ -26,7 +26,15 @@ async function main() {
   await waitPort();
 
   let code = "";
-  const got = { aStart: false, bStart: false, aHost: false, aPlayers: 0, bPlayers: 0 };
+  const got = {
+    aStart: false,
+    bStart: false,
+    aHost: false,
+    aPlayers: 0,
+    bPlayers: 0,
+    bChat: "",
+  };
+  let aSentChat = false;
 
   // ---- host (A) ----
   const a = new WebSocket(URL);
@@ -39,10 +47,14 @@ async function main() {
       got.aHost = m.host;
     } else if (m.t === "roomState") {
       got.aPlayers = m.players.length;
-      // wait for the friend to join + ready before starting
-      if (m.players.length >= 2 && m.canStart && !aStarted) {
+      // once the friend is in the lobby, say hi in chat, then start
+      if (m.players.length >= 2 && !aSentChat) {
+        aSentChat = true;
+        a.send(JSON.stringify({ t: "chat", text: "hi friends" }));
+      }
+      if (m.players.length >= 2 && m.canStart && aSentChat && !aStarted) {
         aStarted = true;
-        a.send(JSON.stringify({ t: "startRoom" }));
+        setTimeout(() => a.send(JSON.stringify({ t: "startRoom" })), 300);
       }
     } else if (m.t === "start") got.aStart = true;
   });
@@ -58,6 +70,7 @@ async function main() {
     if (m.t === "welcome") b.send(JSON.stringify({ t: "joinRoom", code, name: "Friend" }));
     else if (m.t === "roomJoined") b.send(JSON.stringify({ t: "ready", ready: true }));
     else if (m.t === "roomState") got.bPlayers = m.players.length;
+    else if (m.t === "chatMsg") got.bChat = m.text;
     else if (m.t === "start") got.bStart = true;
   });
 
@@ -73,12 +86,14 @@ async function main() {
   if (got.bPlayers < 2) problems.push(`friend should see 2 players, saw ${got.bPlayers}`);
   if (!got.aStart) problems.push("host did not receive MatchStart");
   if (!got.bStart) problems.push("friend did not receive MatchStart");
+  if (got.bChat !== "hi friends")
+    problems.push(`friend should receive lobby chat, got "${got.bChat}"`);
 
   if (problems.length) {
     console.error("\n❌ FAIL:\n - " + problems.join("\n - "));
     process.exit(1);
   }
-  console.log(`\n✅ PASS — private room ${code}: host + friend joined, readied, started; both got MatchStart`);
+  console.log(`\n✅ PASS — private room ${code}: host + friend joined, chatted, readied, started; both got MatchStart`);
   process.exit(0);
 }
 

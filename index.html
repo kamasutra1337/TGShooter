@@ -50,6 +50,7 @@
         <div id="hitmarker" class="hidden">✕</div>
         <div id="damage-flash"></div>
         <div id="spectate" class="hidden"></div>
+        <div id="chat-feed"></div>
       </div>
 
       <!-- Mobile touch controls -->
@@ -59,6 +60,17 @@
         <button id="btn-fire" class="tbtn">🔫</button>
         <button id="btn-jump" class="tbtn">⤴</button>
         <button id="btn-reload" class="tbtn">⟳</button>
+        <button id="btn-chat" class="tbtn">💬</button>
+      </div>
+
+      <!-- In-match chat input (shared, toggled) -->
+      <div id="chat-input-bar" class="hidden">
+        <input
+          id="chat-input"
+          maxlength="140"
+          placeholder="Message your friends…"
+          autocomplete="off"
+        />
       </div>
 
       <!-- Start / menu overlay -->
@@ -194,6 +206,18 @@
           </div>
           <p id="room-sub" class="muted-line"></p>
           <div id="room-players"></div>
+          <div id="room-chat">
+            <div id="room-chat-log"></div>
+            <div class="chat-input-row">
+              <input
+                id="room-chat-input"
+                maxlength="140"
+                placeholder="Message…"
+                autocomplete="off"
+              />
+              <button id="room-chat-send" class="ghost">Send</button>
+            </div>
+          </div>
           <button id="btn-room-start" class="primary hidden">START MATCH</button>
           <button id="btn-room-ready" class="ghost wide">I'm ready</button>
           <button id="btn-room-leave" class="ghost wide">Leave room</button>

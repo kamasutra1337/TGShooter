@@ -93,6 +93,10 @@ wss.on("connection", (ws: WebSocket) => {
       pr.start(id);
     } else if (msg.t === "leaveRoom") {
       pr.leave(id);
+    } else if (msg.t === "chat") {
+      const text = String(msg.text ?? "").slice(0, 140);
+      mm.chat(id, text);
+      pr.chat(id, text);
     } else if (msg.t === "input") {
       mm.routeInput(id, msg);
       pr.routeInput(id, msg);

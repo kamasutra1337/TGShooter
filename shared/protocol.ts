@@ -60,6 +60,11 @@ export interface LeaveRoomMsg {
   t: "leaveRoom";
 }
 
+export interface ChatMsg {
+  t: "chat";
+  text: string;
+}
+
 export type ClientMsg =
   | JoinMsg
   | InputMsg
@@ -67,7 +72,8 @@ export type ClientMsg =
   | JoinRoomMsg
   | ReadyMsg
   | StartRoomMsg
-  | LeaveRoomMsg;
+  | LeaveRoomMsg
+  | ChatMsg;
 
 // ---- server → client ----
 export interface WelcomeMsg {
@@ -162,6 +168,13 @@ export interface RoomErrorMsg {
   reason: string;
 }
 
+export interface ChatEventMsg {
+  t: "chatMsg";
+  name: string;
+  text: string;
+  team: number;
+}
+
 export type ServerMsg =
   | WelcomeMsg
   | MatchStartMsg
@@ -171,6 +184,7 @@ export type ServerMsg =
   | MatchEndMsg
   | RoomJoinedMsg
   | RoomStateMsg
-  | RoomErrorMsg;
+  | RoomErrorMsg
+  | ChatEventMsg;
 
 export const RAKE = 0.05;

@@ -29,6 +29,7 @@ interface OnlineState {
   stake: number;
   youId: string;
   youTeam: number;
+  myName: string;
   running: boolean;
   ammo: number;
   fireCd: number;
@@ -148,6 +149,17 @@ export class Game {
   // Graphics quality toggle (Settings). Lite = plain render (no post-processing).
   setGraphics(high: boolean): void {
     this.effectsOn = high;
+  }
+
+  // In-match chat (online only).
+  sendChat(text: string): void {
+    if (this.online?.running) this.net?.sendChat(text);
+  }
+  isOnline(): boolean {
+    return !!this.online?.running;
+  }
+  clearMovement(): void {
+    this.input.clearKeys();
   }
 
   // Debug hook (used only when the page is opened with ?debug) to exercise firing
@@ -506,6 +518,7 @@ export class Game {
       stake,
       youId,
       youTeam,
+      myName: start.players[seat]?.name ?? "Player",
       running: true,
       ammo: this.weapon.magSize,
       fireCd: 0,
@@ -520,6 +533,12 @@ export class Game {
       onHit: (m) => this.onHit(m),
       onShot: (m) => this.onShot(m),
       onEnd: (m) => void this.onNetEnd(m.youWon, m.payout),
+      onChat: (m) => {
+        const o = this.online;
+        if (!o) return;
+        const cls = m.name === o.myName ? "me" : m.team === o.youTeam ? "blue" : "red";
+        this.hud.chatMessage(m.name, m.text, cls);
+      },
       onClose: () => {
         if (this.online?.running) void this.onNetEnd(false, 0);
       },

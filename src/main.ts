@@ -305,6 +305,20 @@ const btnRoomStart = document.getElementById("btn-room-start") as HTMLButtonElem
 const btnRoomReady = document.getElementById("btn-room-ready") as HTMLButtonElement;
 const btnRoomLeave = document.getElementById("btn-room-leave") as HTMLButtonElement;
 const roomError = document.getElementById("room-error")!;
+const roomChatLog = document.getElementById("room-chat-log")!;
+const roomChatInput = document.getElementById("room-chat-input") as HTMLInputElement;
+const roomChatSend = document.getElementById("room-chat-send") as HTMLButtonElement;
+const chatInputBar = document.getElementById("chat-input-bar")!;
+const chatInput = document.getElementById("chat-input") as HTMLInputElement;
+const btnChat = document.getElementById("btn-chat") as HTMLButtonElement;
+
+function chatLine(log: HTMLElement, name: string, text: string, cls: string): void {
+  const el = document.createElement("div");
+  el.className = "chat-line";
+  el.innerHTML = `<span class="cl-name ${cls}">${escapeHtml(name)}</span>${escapeHtml(text)}`;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
 
 let roomNet: NetworkClient | null = null;
 const roomInfo = { mode: "duel" as Mode, stake: 1, isHost: false, ready: true };
@@ -354,11 +368,14 @@ function wireRoom(net: NetworkClient): void {
       btnRoomReady.classList.toggle("hidden", m.host);
       btnRoomReady.classList.toggle("on", roomInfo.ready);
       roomError.textContent = "";
+      roomChatLog.innerHTML = "";
       joinCodeOverlay.classList.add("hidden");
       menu.classList.add("hidden");
       roomOverlay.classList.remove("hidden");
     },
     onRoomState: (m) => renderRoomPlayers(m),
+    onChat: (m) =>
+      chatLine(roomChatLog, m.name, m.text, m.name === playerName() ? "me" : "blue"),
     onRoomError: (m) => {
       btnJoinConfirm.disabled = false;
       if (!joinCodeOverlay.classList.contains("hidden")) {
@@ -432,6 +449,67 @@ btnRoomReady.addEventListener("click", () => {
 btnRoomStart.addEventListener("click", () => roomNet?.startRoom());
 btnRoomLeave.addEventListener("click", leaveRoomToMenu);
 
+// ---- chat: lobby ----
+function sendRoomChat(): void {
+  const t = roomChatInput.value.trim();
+  if (!t || !roomNet) return;
+  roomNet.sendChat(t);
+  roomChatInput.value = "";
+}
+roomChatSend.addEventListener("click", sendRoomChat);
+roomChatInput.addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendRoomChat();
+  }
+});
+
+// ---- chat: in-match ----
+function openChat(): void {
+  if (!game.isOnline()) return;
+  chatInputBar.classList.remove("hidden");
+  game.clearMovement();
+  if (document.pointerLockElement) document.exitPointerLock();
+  chatInput.focus();
+}
+function closeChat(): void {
+  chatInputBar.classList.add("hidden");
+  chatInput.value = "";
+  chatInput.blur();
+}
+function sendMatchChat(): void {
+  const t = chatInput.value.trim();
+  if (t) game.sendChat(t);
+  closeChat();
+}
+btnChat.addEventListener("click", () => {
+  if (chatInputBar.classList.contains("hidden")) openChat();
+  else closeChat();
+});
+chatInput.addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendMatchChat();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeChat();
+  }
+});
+// Desktop: Enter opens chat during a match
+window.addEventListener("keydown", (e) => {
+  if (
+    e.key === "Enter" &&
+    game.isOnline() &&
+    chatInputBar.classList.contains("hidden") &&
+    !(document.activeElement instanceof HTMLInputElement)
+  ) {
+    e.preventDefault();
+    openChat();
+  }
+});
+
 function renderBoard(data: { week: string; entries: LbEntry[] }): void {
   boardWeek.textContent = data.week ?? "";
   const entries = data.entries ?? [];
@@ -475,6 +553,7 @@ const resultPayout = document.getElementById("result-payout")!;
 const btnAgain = document.getElementById("btn-again") as HTMLButtonElement;
 
 function showResult(win: boolean, payout: number): void {
+  chatInputBar.classList.add("hidden");
   touch.classList.add("hidden");
   resultTitle.textContent = win ? "VICTORY" : "DEFEAT";
   (resultTitle as HTMLElement).style.color = win ? "#37e0a6" : "#ff4d5e";
