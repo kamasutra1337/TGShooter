@@ -944,6 +944,50 @@ body,
   color: var(--accent);
 }
 
+/* ---- community links ---- */
+#community {
+  margin-top: 10px;
+}
+.community-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+#community-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.community-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.community-btn span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.community-btn:hover {
+  border-color: var(--accent);
+  background: rgba(55, 224, 166, 0.1);
+}
+.community-btn:active {
+  transform: scale(0.96);
+}
+
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {
   display: flex;

@@ -195,6 +195,25 @@ dcClaim.addEventListener("click", () => {
 });
 refreshMenuMeta();
 
+// ---- community links (edit these to your real channels) ----
+const COMMUNITY = {
+  telegram: "https://t.me/tgshooter", // TODO: your Telegram channel/chat
+  x: "https://x.com/tgshooter", // TODO: your X handle
+  game: "https://kamasutra1337.github.io/TGShooter/",
+};
+document.getElementById("btn-tg")?.addEventListener("click", () => {
+  Sound.ui();
+  Telegram.openTelegramLink(COMMUNITY.telegram);
+});
+document.getElementById("btn-x")?.addEventListener("click", () => {
+  Sound.ui();
+  Telegram.openLink(COMMUNITY.x);
+});
+document.getElementById("btn-share")?.addEventListener("click", () => {
+  Sound.ui();
+  Telegram.shareGame(COMMUNITY.game, "Play TG Shooter — a Web3 wager FPS on TON 🎮🔫");
+});
+
 // wallet
 Ton.subscribe((s) => {
   if (s.connected) {
