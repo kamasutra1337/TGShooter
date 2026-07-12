@@ -12,6 +12,7 @@ import { Input } from "./Input";
 import { RemoteAvatar } from "./RemoteAvatar";
 import { Nametags, type Tag } from "./Nametags";
 import { Effects } from "./Effects";
+import { Grenades } from "./Grenades";
 import { Sound } from "./Audio";
 import { Telegram } from "../platform/telegram";
 // Local match bookkeeping (practice/offline). Online payouts come from the
@@ -75,6 +76,8 @@ export class Game {
   private hud = new HUD();
   private nametags = new Nametags();
   private effects: Effects;
+  private grenades: Grenades;
+  private baseFov = 78;
   private input: Input;
   private bots: Bot[] = [];
   private clock = new THREE.Clock();
@@ -110,6 +113,7 @@ export class Game {
     this.player = new Player(window.innerWidth / window.innerHeight);
     this.weapon = new Weapon(this.scene);
     this.effects = new Effects(this.scene);
+    this.grenades = new Grenades(this.scene, this.effects);
     this.input = new Input(canvas);
 
     // Camera must be in the scene graph so its first-person viewmodel renders.
@@ -313,11 +317,24 @@ export class Game {
     loop();
   }
 
+  // Smoothly zoom the FOV when aiming down sights (sniper zooms hardest).
+  private updateAdsZoom(dt: number): void {
+    const ads = this.input.state.ads && this.player.alive;
+    const target = ads ? (this.weapon.weaponId === "sniper" ? 30 : 58) : this.baseFov;
+    const cam = this.player.camera;
+    const next = cam.fov + (target - cam.fov) * Math.min(1, dt * 12);
+    if (Math.abs(next - cam.fov) > 0.02) {
+      cam.fov = next;
+      cam.updateProjectionMatrix();
+    }
+  }
+
   private frame(): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (this.online?.running) this.onlineFrame(dt);
     else this.offlineFrame(dt);
 
+    this.updateAdsZoom(dt);
     this.effects.update(dt, this.player.camera);
     this.hud.update(dt);
     this.input.endFrame();
@@ -545,6 +562,8 @@ export class Game {
         const cls = m.name === o.myName ? "me" : m.team === o.youTeam ? "blue" : "red";
         this.hud.chatMessage(m.name, m.text, cls);
       },
+      onNade: (m) => this.grenades.throw(m),
+      onBoom: (m) => this.grenades.boom(m),
       onClose: () => {
         if (this.online?.running) void this.onNetEnd(false, 0);
       },
@@ -567,6 +586,7 @@ export class Game {
 
   private onlineFrame(dt: number): void {
     const o = this.online!;
+    this.grenades.update(dt);
 
     if (this.player.alive) {
       this.weapon.showViewmodel(true);
@@ -601,6 +621,10 @@ export class Game {
         fire: this.input.state.firing,
         jump: this.input.state.jumpQueued,
         reload: this.input.state.reloadQueued,
+        sprint: this.input.state.sprint,
+        crouch: this.input.state.crouch,
+        ads: this.input.state.ads,
+        throwNade: this.input.state.throwQueued,
       });
 
       if (fired) this.weapon.applyRecoil(this.player); // climb the next shot
@@ -776,6 +800,7 @@ export class Game {
       for (const av of this.online.avatars.values()) av.dispose(this.scene);
       this.online.avatars.clear();
     }
+    this.grenades.clear();
     this.net?.close();
     this.net = null;
     this.online = null;

@@ -38,6 +38,7 @@ async function main() {
   // 2) two clients
   const stats = { A: mkStats(), B: mkStats() };
   const endMsgs: Record<string, ServerMsg & { t: "end" }> = {};
+  const grenade = { thrown: 0, boomed: 0 };
 
   function client(tag: "A" | "B") {
     return new Promise<void>((resolve) => {
@@ -70,6 +71,10 @@ async function main() {
               fire: true,
               jump: false,
               reload: false,
+              sprint: false,
+              crouch: false,
+              ads: false,
+              throwNade: seq === 1, // lob one grenade at the start
             };
             if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(input));
           }, 33);
@@ -79,6 +84,10 @@ async function main() {
           if (msg.by === youId) s.hitsDealt++;
         } else if (msg.t === "shot") {
           s.shots++;
+        } else if (msg.t === "nade") {
+          if (tag === "A") grenade.thrown++;
+        } else if (msg.t === "boom") {
+          if (tag === "A") grenade.boomed++;
         } else if (msg.t === "end") {
           endMsgs[tag] = msg;
           log(`${tag} END winnerId=${msg.winnerId} youWon=${msg.youWon} payout=${msg.payout}`);
@@ -137,7 +146,10 @@ async function main() {
   if (!boardWinner || boardWinner.ton <= 0)
     problems.push("leaderboard winner should have positive TON");
 
-  log("stats", JSON.stringify(stats));
+  if (grenade.thrown < 1) problems.push("grenade throw should broadcast a nade event");
+  if (grenade.boomed < 1) problems.push("grenade should detonate (boom event)");
+
+  log("stats", JSON.stringify(stats), "grenade", JSON.stringify(grenade));
   if (problems.length) {
     console.error("\n❌ FAIL:\n - " + problems.join("\n - "));
     process.exit(1);

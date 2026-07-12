@@ -19,10 +19,11 @@ import {
   doFire,
   hitscan,
   feetOf,
+  dirFromAngles,
   type SimInput,
   type SimPlayer,
 } from "../../shared/sim";
-import { spawnFor, rayArena } from "../../shared/arena";
+import { spawnFor, rayArena, groundHeight } from "../../shared/arena";
 import { weaponOf, type WeaponId } from "../../shared/weapons";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
@@ -44,7 +45,31 @@ interface Part {
   input: SimInput;
   respawnT: number; // >0 while waiting to respawn (duel)
   history: { t: number; x: number; y: number; z: number }[]; // feet, for lag comp
+  nades: number; // grenades left this life
+  nadeCd: number; // throw cooldown
 }
+
+interface Grenade {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  fuse: number;
+  owner: Part;
+  team: number;
+}
+
+const NADES_PER_LIFE = 2;
+const NADE_THROW_SPEED = 15;
+const NADE_UP = 4.5;
+const NADE_FUSE = 1.5;
+const NADE_COOLDOWN = 0.7;
+const NADE_RADIUS = 5.5;
+const NADE_MAX_DMG = 95;
+const NADE_GRAVITY = 22;
 
 const emptyInput = (): SimInput => ({
   moveX: 0,
@@ -54,6 +79,10 @@ const emptyInput = (): SimInput => ({
   fire: false,
   jump: false,
   reload: false,
+  sprint: false,
+  crouch: false,
+  ads: false,
+  throwNade: false,
 });
 
 // Fixed lag-compensation window for human shooters (~one interp buffer).
@@ -75,6 +104,8 @@ export class Room {
   private tickN = 0;
   private elapsedMs = 0;
   private ended = false;
+  private grenades: Grenade[] = [];
+  private nadeSeq = 0;
   private onClose: () => void;
   private escrow: EscrowService;
   private leaderboard: Leaderboard;
@@ -135,6 +166,8 @@ export class Room {
       input: emptyInput(),
       respawnT: 0,
       history: [],
+      nades: NADES_PER_LIFE,
+      nadeCd: 0,
     });
   }
 
@@ -153,6 +186,8 @@ export class Room {
       input: emptyInput(),
       respawnT: 0,
       history: [],
+      nades: NADES_PER_LIFE,
+      nadeCd: 0,
     });
   }
 
@@ -202,6 +237,12 @@ export class Room {
       fire: msg.fire,
       jump: msg.jump,
       reload: msg.reload,
+      sprint: !!msg.sprint,
+      crouch: !!msg.crouch,
+      ads: !!msg.ads,
+      // OR-in so a throw isn't lost if two inputs arrive between ticks; the tick
+      // consumes it.
+      throwNade: p.input.throwNade || !!msg.throwNade,
     };
     (p as Part & { ackSeq?: number }).ackSeq = msg.seq;
   }
@@ -235,6 +276,7 @@ export class Room {
         if (p.respawnT <= 0) {
           const seat = this.parts.indexOf(p);
           respawn(p.player, spawnFor(this.mode, seat));
+          p.nades = NADES_PER_LIFE;
         }
       }
 
@@ -307,6 +349,99 @@ export class Room {
           killed,
         });
       }
+    }
+
+    this.stepGrenades(dt);
+  }
+
+  // Grenade throws + in-flight integration + detonation (radius damage).
+  private stepGrenades(dt: number): void {
+    // throws
+    for (const p of this.parts) {
+      if (p.nadeCd > 0) p.nadeCd -= dt;
+      if (!p.input.throwNade) continue;
+      p.input.throwNade = false; // consume the edge
+      if (!p.player.alive || p.nades <= 0 || p.nadeCd > 0) continue;
+      p.nades--;
+      p.nadeCd = NADE_COOLDOWN;
+      const d = dirFromAngles(p.player.yaw, p.player.pitch);
+      const g: Grenade = {
+        id: ++this.nadeSeq,
+        x: p.player.pos.x + d.x * 0.6,
+        y: p.player.pos.y + d.y * 0.6,
+        z: p.player.pos.z + d.z * 0.6,
+        vx: d.x * NADE_THROW_SPEED,
+        vy: d.y * NADE_THROW_SPEED + NADE_UP,
+        vz: d.z * NADE_THROW_SPEED,
+        fuse: NADE_FUSE,
+        owner: p,
+        team: p.team,
+      };
+      this.grenades.push(g);
+      this.broadcast({
+        t: "nade",
+        id: g.id,
+        ox: g.x,
+        oy: g.y,
+        oz: g.z,
+        vx: g.vx,
+        vy: g.vy,
+        vz: g.vz,
+        fuse: g.fuse,
+      });
+    }
+
+    // integrate + detonate
+    for (let i = this.grenades.length - 1; i >= 0; i--) {
+      const g = this.grenades[i];
+      g.vy -= NADE_GRAVITY * dt;
+      g.x += g.vx * dt;
+      g.y += g.vy * dt;
+      g.z += g.vz * dt;
+      // floor bounce (lose energy)
+      const floor = groundHeight(g.x, g.z) + 0.15;
+      if (g.y < floor) {
+        g.y = floor;
+        g.vy = Math.abs(g.vy) * 0.35;
+        g.vx *= 0.6;
+        g.vz *= 0.6;
+      }
+      g.fuse -= dt;
+      if (g.fuse <= 0) {
+        this.detonate(g);
+        this.grenades.splice(i, 1);
+      }
+    }
+  }
+
+  private detonate(g: Grenade): void {
+    this.broadcast({ t: "boom", id: g.id, x: g.x, y: g.y, z: g.z });
+    for (const victim of this.parts) {
+      if (!victim.player.alive || victim.team === g.team) continue; // no friendly fire
+      const f = feetOf(victim.player);
+      const cx = f.x;
+      const cy = f.y + 0.9; // torso
+      const cz = f.z;
+      const dist = Math.hypot(cx - g.x, cy - g.y, cz - g.z);
+      if (dist > NADE_RADIUS) continue;
+      // line-of-sight: walls block the blast
+      const dx = cx - g.x;
+      const dy = cy - g.y;
+      const dz = cz - g.z;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      const wall = rayArena(g.x, g.y, g.z, dx / len, dy / len, dz / len);
+      if (Number.isFinite(wall) && wall < dist - 0.5) continue; // blocked
+      const dmg = NADE_MAX_DMG * (1 - dist / NADE_RADIUS);
+      if (dmg <= 0) continue;
+      const killed = this.applyDamage(g.owner, victim, dmg);
+      this.broadcast({
+        t: "hit",
+        by: g.owner.player.id,
+        target: victim.player.id,
+        headshot: false,
+        damage: dmg,
+        killed,
+      });
     }
   }
 

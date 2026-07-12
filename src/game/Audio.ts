@@ -141,6 +141,16 @@ class SoundEngine {
     this.noiseBurst(0.05, 0.12, "lowpass", 280, 0.9);
   }
 
+  throwNade(): void {
+    this.noiseBurst(0.08, 0.2, "bandpass", 500, 0.9); // whoosh
+  }
+
+  explosion(): void {
+    this.tone(70, 0.5, "sine", 0.5, 30); // deep boom
+    this.noiseBurst(0.45, 0.6, "lowpass", 900, 0.6); // blast
+    this.noiseBurst(0.25, 0.4, "highpass", 2200, 0.7, 0.02); // debris crack
+  }
+
   ui(): void {
     this.tone(880, 0.03, "sine", 0.18);
   }

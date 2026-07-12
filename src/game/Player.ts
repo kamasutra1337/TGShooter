@@ -27,6 +27,7 @@ export class Player {
   readonly eyeHeight = 1.6;
   readonly radius = 0.4;
   private grounded = false;
+  private crouchAmt = 0; // 0..1 smoothed, cosmetic camera dip only
 
   get airborne(): boolean {
     return !this.grounded;
@@ -130,6 +131,11 @@ export class Player {
 
     const a = this.grounded ? this.accel : this.airAccel;
 
+    // Stance: crouch (slow) beats sprint (fast); matches server sim.
+    const speedMult = input.crouch ? 0.5 : input.sprint && !input.crouch ? 1.45 : 1;
+    const eff = this.moveSpeed * speedMult;
+    this.crouchAmt += ((input.crouch ? 1 : 0) - this.crouchAmt) * Math.min(1, dt * 12);
+
     // Apply friction on ground
     if (this.grounded) {
       const speed = Math.hypot(this.velocity.x, this.velocity.z);
@@ -143,9 +149,9 @@ export class Player {
 
     // Accelerate toward wish dir (capped)
     const curSpeed = this.velocity.x * wish.x + this.velocity.z * wish.z;
-    const addSpeed = this.moveSpeed - curSpeed;
+    const addSpeed = eff - curSpeed;
     if (addSpeed > 0) {
-      const accelSpeed = Math.min(a * dt * this.moveSpeed, addSpeed);
+      const accelSpeed = Math.min(a * dt * eff, addSpeed);
       this.velocity.x += wish.x * accelSpeed;
       this.velocity.z += wish.z * accelSpeed;
     }
@@ -188,6 +194,7 @@ export class Player {
 
   private syncCamera(): void {
     this.camera.position.copy(this.position);
+    this.camera.position.y -= this.crouchAmt * 0.45; // crouch dip (view only)
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.effYaw();
     this.camera.rotation.x = this.effPitch();

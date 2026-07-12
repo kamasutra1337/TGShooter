@@ -626,6 +626,31 @@ body,
   right: max(40px, env(safe-area-inset-right));
   bottom: 236px;
 }
+#btn-ads {
+  right: max(150px, calc(env(safe-area-inset-right) + 128px));
+  bottom: 200px;
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+}
+#btn-nade {
+  right: max(40px, env(safe-area-inset-right));
+  bottom: 340px;
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+}
+#btn-crouch {
+  right: max(130px, calc(env(safe-area-inset-right) + 108px));
+  bottom: 340px;
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+}
+.tbtn.active {
+  background: rgba(55, 224, 166, 0.4);
+  border-color: var(--accent);
+}
 
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {

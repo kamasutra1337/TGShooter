@@ -32,6 +32,10 @@ export interface InputMsg {
   fire: boolean;
   jump: boolean;
   reload: boolean;
+  sprint: boolean; // faster move, worse accuracy
+  crouch: boolean; // slower move, tighter spread, lower profile
+  ads: boolean; // aim-down-sights: tighter spread (zoom is client-side)
+  throwNade: boolean; // edge-triggered grenade throw
 }
 
 export interface CreateRoomMsg {
@@ -152,6 +156,29 @@ export interface MatchEndMsg {
   payout: number; // pot * (1 - rake), 0 if you lost
 }
 
+// Server → client: a grenade was thrown. Clients render + integrate the arc
+// deterministically (same gravity) until the boom event lands.
+export interface NadeThrowMsg {
+  t: "nade";
+  id: number;
+  ox: number;
+  oy: number;
+  oz: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  fuse: number; // seconds until detonation
+}
+
+// Server → client: a grenade detonated at a point (FX + sound).
+export interface NadeBoomMsg {
+  t: "boom";
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface RoomJoinedMsg {
   t: "roomJoined";
   code: string;
@@ -225,6 +252,8 @@ export type ServerMsg =
   | ChatEventMsg
   | FundMatchMsg
   | FundStatusMsg
-  | FundFailedMsg;
+  | FundFailedMsg
+  | NadeThrowMsg
+  | NadeBoomMsg;
 
 export const RAKE = 0.05;

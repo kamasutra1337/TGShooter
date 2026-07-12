@@ -40,7 +40,17 @@ export interface SimInput {
   fire: boolean;
   jump: boolean;
   reload: boolean;
+  sprint: boolean;
+  crouch: boolean;
+  ads: boolean;
+  throwNade: boolean;
 }
+
+const SPRINT_MULT = 1.45;
+const CROUCH_MULT = 0.5;
+const ADS_SPREAD = 0.4; // aiming tightens dispersion
+const CROUCH_SPREAD = 0.6;
+const SPRINT_SPREAD = 0.06; // hip-firing on a sprint is wild
 
 export interface SimPlayer {
   id: string;
@@ -58,6 +68,9 @@ export interface SimPlayer {
   reloadT: number;
   recoil: number;
   score: number;
+  sprint: boolean; // movement/aim state mirrored from input (for spread calc)
+  crouch: boolean;
+  ads: boolean;
 }
 
 export function makePlayer(
@@ -82,6 +95,9 @@ export function makePlayer(
     reloadT: 0,
     recoil: 0,
     score: 0,
+    sprint: false,
+    crouch: false,
+    ads: false,
   };
 }
 
@@ -101,6 +117,14 @@ export function stepMovement(p: SimPlayer, input: SimInput, dt: number): void {
   if (!p.alive) return;
   p.yaw = input.yaw;
   p.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, input.pitch));
+
+  // Movement stance (mirrored onto the player so hitscan spread can read it).
+  // Crouch beats sprint; you can't sprint while aiming.
+  p.crouch = !!input.crouch;
+  p.ads = !!input.ads;
+  p.sprint = !!input.sprint && !p.crouch && !p.ads;
+  const speedMult = p.crouch ? CROUCH_MULT : p.sprint ? SPRINT_MULT : 1;
+  const moveSpeed = MOVE_SPEED * speedMult;
 
   const sinY = Math.sin(p.yaw);
   const cosY = Math.cos(p.yaw);
@@ -126,9 +150,9 @@ export function stepMovement(p: SimPlayer, input: SimInput, dt: number): void {
   }
 
   const cur = p.vel.x * wx + p.vel.z * wz;
-  const add = MOVE_SPEED - cur;
+  const add = moveSpeed - cur;
   if (add > 0) {
-    const accelSpeed = Math.min(a * dt * MOVE_SPEED, add);
+    const accelSpeed = Math.min(a * dt * moveSpeed, add);
     p.vel.x += wx * accelSpeed;
     p.vel.z += wz * accelSpeed;
   }
@@ -233,7 +257,11 @@ export function spreadValue(
 }
 
 export function spreadFor(p: SimPlayer): number {
-  return spreadValue(weaponOf(p.weaponId), Math.hypot(p.vel.x, p.vel.z), !p.grounded, p.recoil);
+  let s = spreadValue(weaponOf(p.weaponId), Math.hypot(p.vel.x, p.vel.z), !p.grounded, p.recoil);
+  if (p.ads) s *= ADS_SPREAD; // aiming down sights tightens the shot
+  if (p.crouch) s *= CROUCH_SPREAD;
+  if (p.sprint) s += SPRINT_SPREAD;
+  return s;
 }
 
 // Offset a normalized direction within a cone of half-angle `spread`, using a

@@ -15,6 +15,8 @@ import type {
   FundMatchMsg,
   FundStatusMsg,
   FundFailedMsg,
+  NadeThrowMsg,
+  NadeBoomMsg,
 } from "../../shared/protocol";
 import type { WeaponId } from "../../shared/weapons";
 
@@ -34,6 +36,8 @@ export interface NetHandlers {
   onFund?: (m: FundMatchMsg) => void;
   onFundStatus?: (m: FundStatusMsg) => void;
   onFundFailed?: (m: FundFailedMsg) => void;
+  onNade?: (m: NadeThrowMsg) => void;
+  onBoom?: (m: NadeBoomMsg) => void;
   onClose?: () => void;
 }
 
@@ -130,6 +134,12 @@ export class NetworkClient {
         break;
       case "fundFailed":
         this.handlers.onFundFailed?.(msg);
+        break;
+      case "nade":
+        this.handlers.onNade?.(msg);
+        break;
+      case "boom":
+        this.handlers.onBoom?.(msg);
         break;
     }
   }

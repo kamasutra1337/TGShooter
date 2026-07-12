@@ -28,6 +28,10 @@ export class ServerBot {
       fire: false,
       jump: false,
       reload: false,
+      sprint: false,
+      crouch: false,
+      ads: false,
+      throwNade: false,
     };
     if (!self.alive) return input;
 

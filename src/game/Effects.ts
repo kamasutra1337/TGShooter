@@ -79,6 +79,86 @@ export class Effects {
     }
   }
 
+  // Grenade explosion: a bright flash + fast fire sparks + rising smoke.
+  explosion(point: THREE.Vector3): void {
+    // core flash
+    if (this.parts.length < MAX_PARTS) {
+      const flash = new THREE.Mesh(
+        SPARK_GEO,
+        new THREE.MeshBasicMaterial({
+          color: 0xffe6a0,
+          transparent: true,
+          opacity: 1,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      flash.position.copy(point);
+      flash.scale.setScalar(1.4);
+      this.parts.push({ mesh: flash, vx: 0, vy: 0, vz: 0, life: 0.14, max: 0.14, grav: 0, base: 1, smoke: false });
+      this.scene.add(flash);
+    }
+    // fire sparks
+    for (let i = 0; i < 22; i++) {
+      if (this.parts.length >= MAX_PARTS) break;
+      const mesh = new THREE.Mesh(
+        SPARK_GEO,
+        new THREE.MeshBasicMaterial({
+          color: i % 3 === 0 ? 0xff7a2a : 0xffd27a,
+          transparent: true,
+          opacity: 1,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      mesh.position.copy(point);
+      mesh.scale.setScalar(0.08 + Math.random() * 0.1);
+      const sp = 6 + Math.random() * 9;
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.random() * Math.PI - Math.PI / 2;
+      this.parts.push({
+        mesh,
+        vx: Math.cos(th) * Math.cos(ph) * sp,
+        vy: Math.abs(Math.sin(ph)) * sp * 0.9 + 1,
+        vz: Math.sin(th) * Math.cos(ph) * sp,
+        life: 0.35 + Math.random() * 0.25,
+        max: 0.6,
+        grav: 14,
+        base: 1,
+        smoke: false,
+      });
+      this.scene.add(mesh);
+    }
+    // smoke plume
+    for (let i = 0; i < 5; i++) {
+      if (this.parts.length >= MAX_PARTS) break;
+      const mesh = new THREE.Mesh(
+        SMOKE_GEO,
+        new THREE.MeshBasicMaterial({
+          color: 0x3a3a3a,
+          transparent: true,
+          opacity: 0.5,
+          depthWrite: false,
+        }),
+      );
+      mesh.position.copy(point);
+      mesh.position.y += 0.3;
+      mesh.scale.setScalar(1.2);
+      this.parts.push({
+        mesh,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: 1.2 + Math.random(),
+        vz: (Math.random() - 0.5) * 1.5,
+        life: 0.9 + Math.random() * 0.4,
+        max: 1.3,
+        grav: -1,
+        base: 0.5,
+        smoke: true,
+      });
+      this.scene.add(mesh);
+    }
+  }
+
   // A soft smoke puff drifting up from the muzzle.
   muzzleSmoke(point: THREE.Vector3): void {
     if (this.parts.length >= MAX_PARTS) return;

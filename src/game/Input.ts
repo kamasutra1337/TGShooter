@@ -10,6 +10,10 @@ export interface InputState {
   firing: boolean;
   jumpQueued: boolean;
   reloadQueued: boolean;
+  sprint: boolean; // faster move (auto on full-forward touch / Shift)
+  crouch: boolean; // toggled
+  ads: boolean; // aim-down-sights (hold)
+  throwQueued: boolean; // edge: grenade throw
 }
 
 export class Input {
@@ -21,6 +25,10 @@ export class Input {
     firing: false,
     jumpQueued: false,
     reloadQueued: false,
+    sprint: false,
+    crouch: false,
+    ads: false,
+    throwQueued: false,
   };
 
   sensitivity = 0.0022;
@@ -60,6 +68,9 @@ export class Input {
     this.state.lookDY = 0;
     this.state.jumpQueued = false;
     this.state.reloadQueued = false;
+    this.state.throwQueued = false;
+    // Touch sprint follows the stick: full-forward push = sprint.
+    if (this.isTouch) this.state.sprint = this.state.moveY > 0.85;
   }
 
   // ---------------- desktop ----------------
@@ -80,10 +91,15 @@ export class Input {
       this.keys.add(e.code);
       if (e.code === "Space") this.state.jumpQueued = true;
       if (e.code === "KeyR") this.state.reloadQueued = true;
+      if (e.code === "KeyG") this.state.throwQueued = true;
+      if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.state.sprint = true;
+      if (e.code === "ControlLeft" || e.code === "KeyC") this.state.crouch = true;
       this.recomputeKeys();
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
+      if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.state.sprint = false;
+      if (e.code === "ControlLeft" || e.code === "KeyC") this.state.crouch = false;
       this.recomputeKeys();
     });
 
@@ -99,11 +115,15 @@ export class Input {
       this.state.lookDY += e.movementY * this.sensitivity;
     });
     window.addEventListener("mousedown", (e) => {
-      if (this.pointerLocked && e.button === 0) this.state.firing = true;
+      if (!this.pointerLocked) return;
+      if (e.button === 0) this.state.firing = true;
+      if (e.button === 2) this.state.ads = true; // right mouse = aim
     });
     window.addEventListener("mouseup", (e) => {
       if (e.button === 0) this.state.firing = false;
+      if (e.button === 2) this.state.ads = false;
     });
+    window.addEventListener("contextmenu", (e) => e.preventDefault()); // free RMB
   }
 
   private recomputeKeys(): void {
@@ -222,6 +242,30 @@ export class Input {
     });
     reload.addEventListener("touchstart", (e) => {
       this.state.reloadQueued = true;
+      e.preventDefault();
+    });
+
+    // crouch: toggle. ads: hold. grenade: tap.
+    const crouchBtn = document.getElementById("btn-crouch");
+    crouchBtn?.addEventListener("touchstart", (e) => {
+      this.state.crouch = !this.state.crouch;
+      crouchBtn.classList.toggle("active", this.state.crouch);
+      e.preventDefault();
+    });
+    const adsBtn = document.getElementById("btn-ads");
+    adsBtn?.addEventListener("touchstart", (e) => {
+      this.state.ads = true;
+      adsBtn.classList.add("active");
+      e.preventDefault();
+    });
+    adsBtn?.addEventListener("touchend", (e) => {
+      this.state.ads = false;
+      adsBtn.classList.remove("active");
+      e.preventDefault();
+    });
+    const nadeBtn = document.getElementById("btn-nade");
+    nadeBtn?.addEventListener("touchstart", (e) => {
+      this.state.throwQueued = true;
       e.preventDefault();
     });
   }
