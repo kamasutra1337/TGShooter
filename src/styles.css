@@ -123,6 +123,7 @@ body,
   right: 0;
   display: flex;
   justify-content: center;
+  z-index: 18; /* stay readable over the sniper scope overlay */
 }
 
 #score {
@@ -144,6 +145,7 @@ body,
   justify-content: space-between;
   align-items: flex-end;
   padding: 0 22px;
+  z-index: 18; /* stay readable over the sniper scope overlay */
 }
 
 #health-wrap {
@@ -878,6 +880,55 @@ body,
   height: 100%;
   width: 0;
   background: var(--accent);
+}
+
+/* ---- sniper scope overlay ---- */
+#scope {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+.scope-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(84vw, 84vh);
+  height: min(84vw, 84vh);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.85);
+  /* everything outside the circle goes black */
+  box-shadow: 0 0 0 3000px rgba(0, 0, 0, 0.94);
+}
+.scope-h,
+.scope-v {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(0, 0, 0, 0.8);
+  transform: translate(-50%, -50%);
+}
+.scope-h {
+  width: min(84vw, 84vh);
+  height: 1px;
+}
+.scope-v {
+  width: 1px;
+  height: min(84vw, 84vh);
+}
+.scope-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ff3b3b;
+  transform: translate(-50%, -50%);
+}
+#crosshair.scoped-hide {
+  display: none;
 }
 
 /* ---------- Menu actions + panels (settings, rooms) ---------- */

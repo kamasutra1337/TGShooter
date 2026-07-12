@@ -83,6 +83,9 @@ export class Game {
   private grenades: Grenades;
   private minimap: Minimap;
   private baseFov = 78;
+  private scoped = false;
+  private scopeEl = document.getElementById("scope")!;
+  private crosshairEl = document.getElementById("crosshair");
   private dmgNumbers = true;
   private blood = true;
   private mstats = { shots: 0, hits: 0, damage: 0, kills: 0, deaths: 0 };
@@ -384,15 +387,29 @@ export class Game {
     loop();
   }
 
-  // Smoothly zoom the FOV when aiming down sights (sniper zooms hardest).
+  // Aim-down-sights: smooth FOV zoom, weapon-tuned turn slowdown, and a scope
+  // overlay for the sniper (viewmodel + crosshair hidden while scoped).
   private updateAdsZoom(dt: number): void {
+    const isSniper = this.weapon.weaponId === "sniper";
+    this.player.adsSens = isSniper ? 0.38 : 0.6;
+
     const ads = this.input.state.ads && this.player.alive;
-    const target = ads ? (this.weapon.weaponId === "sniper" ? 30 : 58) : this.baseFov;
+    const target = ads ? (isSniper ? 26 : 55) : this.baseFov;
     const cam = this.player.camera;
-    const next = cam.fov + (target - cam.fov) * Math.min(1, dt * 12);
+    const next = cam.fov + (target - cam.fov) * Math.min(1, dt * 14);
     if (Math.abs(next - cam.fov) > 0.02) {
       cam.fov = next;
       cam.updateProjectionMatrix();
+    }
+
+    // Sniper scope overlay once the zoom is nearly settled.
+    const scoped = ads && isSniper && Math.abs(cam.fov - target) < 6;
+    // Hide the viewmodel while scoped (runs after the frame loops, so it wins).
+    this.weapon.showViewmodel(!scoped && this.player.alive);
+    if (scoped !== this.scoped) {
+      this.scoped = scoped;
+      this.scopeEl.classList.toggle("hidden", !scoped);
+      this.crosshairEl?.classList.toggle("scoped-hide", scoped);
     }
   }
 
@@ -537,6 +554,7 @@ export class Game {
     const m = this.match;
     if (!m) return;
     this.mstats.deaths++;
+    this.input.clearAds();
     Sound.die();
     this.hud.killFeed("Enemy", "You", true);
     Telegram.notify("error");
@@ -807,6 +825,7 @@ export class Game {
         if (wasAlive && !s.alive) {
           Sound.die();
           this.mstats.deaths++;
+          this.input.clearAds(); // don't respawn stuck in zoom
         }
         if (s.alive) {
           this.hud.setSpectate(null);

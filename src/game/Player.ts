@@ -28,6 +28,7 @@ export class Player {
   readonly radius = 0.4;
   private grounded = false;
   private crouchAmt = 0; // 0..1 smoothed, cosmetic camera dip only
+  adsSens = 0.6; // look-sensitivity multiplier while aiming (weapon-tuned)
 
   get airborne(): boolean {
     return !this.grounded;
@@ -108,9 +109,10 @@ export class Player {
   update(dt: number, input: InputState, arena: Arena): void {
     if (!this.alive) return;
 
-    // Look
-    this.yaw -= input.lookDX;
-    this.pitch -= input.lookDY;
+    // Look — aiming down sights slows the turn for finer control.
+    const look = input.ads ? this.adsSens : 1;
+    this.yaw -= input.lookDX * look;
+    this.pitch -= input.lookDY * look;
     this.pitch = Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch));
 
     // Recoil recovers toward 0 (the view settles after a spray)

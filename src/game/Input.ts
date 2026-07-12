@@ -44,6 +44,12 @@ export class Input {
     this.touchSensitivity = this.baseTouchSens * mult;
   }
 
+  // Force aim-down-sights off (e.g. on death) + reset the toggle button.
+  clearAds(): void {
+    this.state.ads = false;
+    document.getElementById("btn-ads")?.classList.remove("active");
+  }
+
   private keys = new Set<string>();
   private pointerLocked = false;
   private canvas: HTMLCanvasElement;
@@ -267,15 +273,12 @@ export class Input {
       crouchBtn.classList.toggle("active", this.state.crouch);
       e.preventDefault();
     });
+    // ADS is a TAP TOGGLE on touch (no need to hold a third finger while the
+    // shooting thumb aims + fires). Tap to zoom in, tap again to zoom out.
     const adsBtn = document.getElementById("btn-ads");
     adsBtn?.addEventListener("touchstart", (e) => {
-      this.state.ads = true;
-      adsBtn.classList.add("active");
-      e.preventDefault();
-    });
-    adsBtn?.addEventListener("touchend", (e) => {
-      this.state.ads = false;
-      adsBtn.classList.remove("active");
+      this.state.ads = !this.state.ads;
+      adsBtn.classList.toggle("active", this.state.ads);
       e.preventDefault();
     });
     const nadeBtn = document.getElementById("btn-nade");
