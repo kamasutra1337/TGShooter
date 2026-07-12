@@ -112,61 +112,58 @@ const DEPOT = makeMap(
   ],
 );
 
-// --- Map 1: CROSSFIRE — long side lanes with tall containers, a central plus of
-// low cover. Encourages mid-range duels down the flanks. Symmetric.
-const CROSSFIRE = makeMap(
+// --- Map 1: FORTRESS — a dominant tall structure owns the centre, so the whole
+// fight is about flanking around it. Nothing like Depot's open middle. Corner
+// nests + side walls. Mirror-symmetric.
+const FORTRESS = makeMap(
   1,
-  "Crossfire",
+  "Fortress",
   [
-    // long flank walls creating two side lanes
-    { b: [-10, 1.5, 0, 2, 3, 16], kind: "container" },
-    { b: [10, 1.5, 0, 2, 3, 16], kind: "container" },
-    // central plus of low cover
-    { b: [0, 1.1, 0, 5, 2.2, 2], kind: "crate" },
-    { b: [0, 1.1, 0, 2, 2.2, 5], kind: "crate" },
-    // mid-lane bumps
-    { b: [0, 0.7, -11, 6, 1.4, 2], kind: "ammo" },
-    { b: [0, 0.7, 11, 6, 1.4, 2], kind: "ammo" },
-    // corner crates
-    { b: [-17, 1.1, -17, 3, 2.2, 3], kind: "crate" },
-    { b: [17, 1.1, 17, 3, 2.2, 3], kind: "crate" },
-    { b: [17, 1.1, -17, 3, 2.2, 3], kind: "crate" },
-    { b: [-17, 1.1, 17, 3, 2.2, 3], kind: "crate" },
-    // outer flank barriers
-    { b: [-18, 1.5, 0, 3, 3, 5], kind: "barrier" },
-    { b: [18, 1.5, 0, 3, 3, 5], kind: "barrier" },
-  ],
-  [
-    [-20, 0, 20],
-    [20, 0, -20],
+    // central keep (tall — blocks all sightlines through the middle)
+    { b: [0, 1.5, 0, 9, 3, 9], kind: "platform" },
+    // approach cover on the two open faces
+    { b: [0, 1.1, -13, 6, 2.2, 2], kind: "crate" },
+    { b: [0, 1.1, 13, 6, 2.2, 2], kind: "crate" },
+    // side gate walls
+    { b: [-13, 1.5, 0, 2, 3, 7], kind: "container" },
+    { b: [13, 1.5, 0, 2, 3, 7], kind: "container" },
+    // corner nests (tall containers) — high-ground angles onto the keep
+    { b: [-17, 1.5, 13, 4, 3, 4], kind: "container" },
+    { b: [17, 1.5, -13, 4, 3, 4], kind: "container" },
+    { b: [17, 1.5, 13, 4, 3, 4], kind: "barrier" },
+    { b: [-17, 1.5, -13, 4, 3, 4], kind: "barrier" },
+    // diagonal low bumps near the keep corners
+    { b: [-8, 1.1, 8, 2, 2.2, 2], kind: "ammo" },
+    { b: [8, 1.1, -8, 2, 2.2, 2], kind: "ammo" },
   ],
 );
 
-// --- Map 2: YARD — scattered shipping containers + a central platform. Broken
-// sightlines, more flanking. Symmetric about the origin.
-const YARD = makeMap(
+// --- Map 2: MAZE — parallel rows of tall shipping containers form winding
+// corridors: tight, close-quarters, broken sightlines everywhere. The opposite
+// of Depot's open floor. Mirror-symmetric; spawn rows kept clear.
+const MAZE = makeMap(
   2,
-  "Yard",
+  "Maze",
   [
-    { b: [0, 1.5, 0, 6, 3, 6], kind: "platform" },
-    { b: [-12, 1.5, -6, 5, 3, 3, ], kind: "container" },
-    { b: [12, 1.5, 6, 5, 3, 3], kind: "container" },
-    { b: [6, 1.5, -13, 3, 3, 6], kind: "container" },
-    { b: [-6, 1.5, 13, 3, 3, 6], kind: "container" },
-    { b: [-18, 1.1, 2, 3, 2.2, 3], kind: "crate" },
-    { b: [18, 1.1, -2, 3, 2.2, 3], kind: "crate" },
-    { b: [0, 1.1, -16, 6, 2.2, 2], kind: "barrier" },
-    { b: [0, 1.1, 16, 6, 2.2, 2], kind: "barrier" },
-    { b: [-9, 0.7, 9, 4, 1.4, 4], kind: "ammo" },
-    { b: [9, 0.7, -9, 4, 1.4, 4], kind: "ammo" },
-  ],
-  [
-    [-19, 0, 17],
-    [19, 0, -17],
+    // long flank corridors
+    { b: [-11, 1.5, -3, 3, 3, 12], kind: "container" },
+    { b: [11, 1.5, 3, 3, 3, 12], kind: "container" },
+    // inner staggered blocks
+    { b: [-4, 1.5, 8, 3, 3, 8], kind: "container" },
+    { b: [4, 1.5, -8, 3, 3, 8], kind: "container" },
+    { b: [4, 1.5, 9, 3, 3, 6], kind: "container" },
+    { b: [-4, 1.5, -9, 3, 3, 6], kind: "container" },
+    // outer nooks
+    { b: [-13, 1.1, 9, 3, 2.2, 3], kind: "crate" },
+    { b: [13, 1.1, -9, 3, 2.2, 3], kind: "crate" },
+    { b: [-8, 1.1, -2, 3, 2.2, 3], kind: "crate" },
+    { b: [8, 1.1, 2, 3, 2.2, 3], kind: "crate" },
+    // central pillar
+    { b: [0, 1.5, 0, 3, 3, 5], kind: "barrier" },
   ],
 );
 
-export const MAPS: GameMap[] = [DEPOT, CROSSFIRE, YARD];
+export const MAPS: GameMap[] = [DEPOT, FORTRESS, MAZE];
 
 export function mapById(id: number): GameMap {
   return MAPS[id] ?? MAPS[0];

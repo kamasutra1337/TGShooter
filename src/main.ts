@@ -165,7 +165,7 @@ renderWeaponCards();
 renderWeaponDetail();
 
 // ---- map picker (-1 = random) ----
-const MAP_ICON = ["🏭", "🔀", "📦"];
+const MAP_ICON = ["🏭", "🏰", "🧱"];
 function loadMap(): number {
   const raw = localStorage.getItem("tgs-map");
   if (raw == null) return -1; // default: Random
