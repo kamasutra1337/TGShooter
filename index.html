@@ -87,6 +87,17 @@
         <div class="menu-card">
           <h1>TG&nbsp;SHOOTER</h1>
           <p class="sub">Web3 FPS · TON · vertical slice</p>
+          <div id="rank-row">
+            <div id="rank-badge">Recruit · Lv 1</div>
+            <div id="xp-bar"><div id="xp-fill"></div></div>
+          </div>
+          <div id="daily-challenge">
+            <div class="dc-head">
+              <span id="dc-text">Daily challenge</span>
+              <button id="dc-claim" class="ghost hidden">Claim +150</button>
+            </div>
+            <div id="dc-bar"><div id="dc-fill"></div></div>
+          </div>
           <div id="mode-row">
             <button class="mode-chip active" data-mode="duel">
               <b>1 vs 1</b>
@@ -276,6 +287,9 @@
         <div class="result-card">
           <h2 id="result-title">VICTORY</h2>
           <div class="payout" id="result-payout"></div>
+          <div id="result-mvp" class="hidden"></div>
+          <div id="result-stats"></div>
+          <div id="result-xp"></div>
           <button id="btn-again" class="primary">RETURN TO LOBBY</button>
         </div>
       </div>

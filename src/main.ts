@@ -10,6 +10,15 @@ import { playIntro } from "./game/Intro";
 import { loadSettings, saveSettings, applyCrosshair, SWATCHES } from "./game/Settings";
 import { Sound } from "./game/Audio";
 import { Music } from "./game/Music";
+import {
+  loadProgress,
+  levelForXp,
+  xpForLevel,
+  rankName,
+  recordMatch,
+  loadChallenge,
+  claimChallenge,
+} from "./game/Progression";
 
 // Authoritative server URL. Override with VITE_SERVER_URL for production
 // (wss://your-host). Defaults to the current host on the dev port so a phone on
@@ -153,6 +162,38 @@ function renderWeaponCards(): void {
 }
 renderWeaponCards();
 renderWeaponDetail();
+
+// ---- meta: rank + daily challenge ----
+const rankBadge = document.getElementById("rank-badge")!;
+const xpFill = document.getElementById("xp-fill")!;
+const dcText = document.getElementById("dc-text")!;
+const dcFill = document.getElementById("dc-fill")!;
+const dcClaim = document.getElementById("dc-claim") as HTMLButtonElement;
+
+function refreshMenuMeta(): void {
+  const p = loadProgress();
+  const lvl = levelForXp(p.xp);
+  rankBadge.textContent = `${rankName(lvl)} · Lv ${lvl}`;
+  const cur = xpForLevel(lvl);
+  const next = xpForLevel(lvl + 1);
+  const pct = next > cur ? ((p.xp - cur) / (next - cur)) * 100 : 100;
+  xpFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+
+  const c = loadChallenge();
+  const claimable = c.progress >= c.goal && !c.claimed;
+  dcText.textContent = c.claimed
+    ? `${c.desc} ✓`
+    : `${c.desc} — ${Math.min(c.progress, c.goal)}/${c.goal}`;
+  dcFill.style.width = `${Math.min(100, (c.progress / c.goal) * 100)}%`;
+  dcClaim.classList.toggle("hidden", !claimable);
+}
+dcClaim.addEventListener("click", () => {
+  if (claimChallenge() > 0) {
+    Sound.ui();
+    refreshMenuMeta();
+  }
+});
+refreshMenuMeta();
 
 // wallet
 Ton.subscribe((s) => {
@@ -685,6 +726,9 @@ function escapeHtml(s: string): string {
 // result overlay
 const resultTitle = document.getElementById("result-title")!;
 const resultPayout = document.getElementById("result-payout")!;
+const resultMvp = document.getElementById("result-mvp")!;
+const resultStats = document.getElementById("result-stats")!;
+const resultXp = document.getElementById("result-xp")!;
 const btnAgain = document.getElementById("btn-again") as HTMLButtonElement;
 
 function showResult(win: boolean, payout: number): void {
@@ -697,6 +741,34 @@ function showResult(win: boolean, payout: number): void {
       ? `+${payout} TON claimed`
       : "You won the pot"
     : "Better luck next round";
+
+  // MVP (online only)
+  const mvp = game.getMvp();
+  if (mvp) {
+    resultMvp.innerHTML = `🏆 MVP: <b>${mvp.you ? "You" : escapeHtml(mvp.name)}</b> · ${mvp.kills} kills`;
+    resultMvp.classList.remove("hidden");
+  } else {
+    resultMvp.classList.add("hidden");
+  }
+
+  // match stats
+  const st = game.getMatchStats();
+  resultStats.innerHTML =
+    `<div class="rs"><span>${st.kills}</span><label>Kills</label></div>` +
+    `<div class="rs"><span>${st.deaths}</span><label>Deaths</label></div>` +
+    `<div class="rs"><span>${st.accuracy}%</span><label>Accuracy</label></div>` +
+    `<div class="rs"><span>${Math.round(st.damage)}</span><label>Damage</label></div>`;
+
+  // XP + level + daily challenge
+  const before = loadProgress();
+  const beforeLevel = levelForXp(before.xp);
+  const res = recordMatch({ kills: st.kills, deaths: st.deaths, won: win });
+  let xpLine = `+${res.gained} XP · <b>${rankName(res.level)}</b> (Lv ${res.level})`;
+  if (res.leveledUp) xpLine += ` — <span class="lvlup">LEVEL UP!</span>`;
+  void beforeLevel;
+  resultXp.innerHTML = xpLine;
+
+  refreshMenuMeta();
   result.classList.remove("hidden");
   if (win) Sound.win();
   else Sound.lose();

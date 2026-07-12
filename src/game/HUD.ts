@@ -51,10 +51,11 @@ export class HUD {
     setTimeout(() => el.remove(), 8000);
   }
 
-  killFeed(killer: string, victim: string, mine: boolean): void {
+  killFeed(killer: string, victim: string, mine: boolean, weapon?: string): void {
+    const icon = weapon ? (KF_ICON[weapon] ?? "✕") : "✕";
     const el = document.createElement("div");
     el.className = "kf" + (mine ? " mine" : "");
-    el.innerHTML = `<span class="kf-k">${esc(killer)}</span><span class="kf-x">✕</span><span class="kf-v">${esc(victim)}</span>`;
+    el.innerHTML = `<span class="kf-k">${esc(killer)}</span><span class="kf-x">${icon}</span><span class="kf-v">${esc(victim)}</span>`;
     this.killfeed.prepend(el);
     while (this.killfeed.children.length > 5) this.killfeed.lastChild?.remove();
     setTimeout(() => el.remove(), 4500);
@@ -203,6 +204,13 @@ export class HUD {
     }
   }
 }
+
+const KF_ICON: Record<string, string> = {
+  rifle: "🔫",
+  smg: "💥",
+  sniper: "🎯",
+  shotgun: "🩸",
+};
 
 function esc(s: string): string {
   return s.replace(

@@ -46,6 +46,7 @@ interface OnlineState {
   avatars: Map<string, RemoteAvatar>;
   names: Map<string, string>;
   teams: Map<string, number>;
+  weapons: Map<string, WeaponId>;
   spectateId: string | null; // teammate being followed while dead
   roster: Map<string, { x: number; z: number; team: number; alive: boolean; kills: number }>;
   startT: number; // performance.now() at match start (for the timer)
@@ -84,6 +85,25 @@ export class Game {
   private baseFov = 78;
   private dmgNumbers = true;
   private blood = true;
+  private mstats = { shots: 0, hits: 0, damage: 0, kills: 0, deaths: 0 };
+
+  getMatchStats(): { shots: number; hits: number; damage: number; kills: number; deaths: number; accuracy: number } {
+    const s = this.mstats;
+    return { ...s, accuracy: s.shots > 0 ? Math.round((s.hits / s.shots) * 100) : 0 };
+  }
+  private resetStats(): void {
+    this.mstats = { shots: 0, hits: 0, damage: 0, kills: 0, deaths: 0 };
+  }
+
+  // Top-scoring player this match (online only). Returns { name, kills, you }.
+  getMvp(): { name: string; kills: number; you: boolean } | null {
+    const o = this.online;
+    if (!o || o.roster.size === 0) return null;
+    let best: { id: string; kills: number } | null = null;
+    for (const [id, r] of o.roster) if (!best || r.kills > best.kills) best = { id, kills: r.kills };
+    if (!best) return null;
+    return { name: o.names.get(best.id) ?? "Player", kills: best.kills, you: best.id === o.youId };
+  }
 
   setFov(deg: number): void {
     this.baseFov = deg;
@@ -314,6 +334,7 @@ export class Game {
     // Reset player + configure the chosen weapon (sets mag/reserve from spec)
     this.player.reset(new THREE.Vector3(0, 1.6, 20), 0);
     this.weapon.configure(cfg.weapon ?? DEFAULT_WEAPON);
+    this.resetStats();
 
     this.hud.show();
     this.hud.setHealth(100);
@@ -386,17 +407,21 @@ export class Game {
       if (this.input.state.firing) {
         const res = this.weapon.tryFire(this.player, this.bots, this.arena.solids);
         if (res) {
+          this.mstats.shots++;
           Sound.shot();
           this.effects.muzzleSmoke(this.weapon.muzzleWorld());
           Telegram.haptic("light");
           if (res.point) this.effects.impact(res.point, res.hitBot != null && this.blood);
           if (res.hitBot) {
+            this.mstats.hits++;
+            this.mstats.damage += res.damage;
             const dmg = res.damage; // aggregate (pellets + distance falloff)
             const died = res.hitBot.damage(dmg);
             this.hud.hitMarker(res.headshot);
             Sound.hitEnemy(res.headshot);
             if (res.point) this.showDamage(res.point, dmg, res.headshot);
             if (died) {
+              this.mstats.kills++;
               Sound.kill();
               this.onBotDied(res.hitBot);
             }
@@ -485,6 +510,7 @@ export class Game {
   private onPlayerDied(): void {
     const m = this.match;
     if (!m) return;
+    this.mstats.deaths++;
     Sound.die();
     this.hud.killFeed("Enemy", "You", true);
     Telegram.notify("error");
@@ -528,6 +554,7 @@ export class Game {
     this.onEnd = onEnd;
     this.net = net;
     this.match = null;
+    this.resetStats();
 
     // clear any offline bots
     for (const b of this.bots) this.scene.remove(b.root);
@@ -550,9 +577,11 @@ export class Game {
     const avatars = new Map<string, RemoteAvatar>();
     const names = new Map<string, string>();
     const teams = new Map<string, number>();
+    const weapons = new Map<string, WeaponId>();
     start.players.forEach((p) => {
       names.set(p.id, p.name);
       teams.set(p.id, p.team);
+      weapons.set(p.id, p.weapon);
       if (p.id === youId) return;
       const av = new RemoteAvatar(p.team, p.weapon); // team-colored skin + their gun
       this.scene.add(av.root);
@@ -572,6 +601,7 @@ export class Game {
       avatars,
       names,
       teams,
+      weapons,
       spectateId: null,
       roster: new Map(),
       startT: performance.now(),
@@ -741,7 +771,10 @@ export class Game {
         const wasAlive = this.player.alive;
         this.player.health = s.health;
         this.player.alive = s.alive;
-        if (wasAlive && !s.alive) Sound.die();
+        if (wasAlive && !s.alive) {
+          Sound.die();
+          this.mstats.deaths++;
+        }
         if (s.alive) {
           this.hud.setSpectate(null);
           // Reconcile: trust prediction unless it diverges, or on respawn.
@@ -780,20 +813,24 @@ export class Game {
     if (!o) return;
     o.avatars.get(m.target)?.flash(); // red hit flash on the struck soldier
     if (m.by === o.youId) {
+      this.mstats.hits++;
+      this.mstats.damage += m.damage;
       this.hud.hitMarker(m.headshot);
       this.showDamage(this.lastShotImpact, m.damage, m.headshot);
       this.effects.impact(this.lastShotImpact, this.blood); // red flesh puff (if blood on)
       Sound.hitEnemy(m.headshot);
       Telegram.haptic("light");
       if (m.killed) {
+        this.mstats.kills++;
         Sound.kill();
-        this.hud.killFeed("You", o.names.get(m.target) ?? "Enemy", true);
+        this.hud.killFeed("You", o.names.get(m.target) ?? "Enemy", true, o.weapons.get(m.by));
       }
     } else if (m.killed) {
       this.hud.killFeed(
         o.names.get(m.by) ?? "?",
         o.names.get(m.target) ?? "?",
         m.target === o.youId,
+        o.weapons.get(m.by),
       );
     }
     if (m.target === o.youId) {
@@ -817,6 +854,7 @@ export class Game {
     const to = new THREE.Vector3(m.hx, m.hy, m.hz);
     this.effects.impact(to, false);
     if (m.by === o.youId) {
+      this.mstats.shots++;
       this.lastShotImpact.copy(to); // for the damage number on the next hit
       this.weapon.showTracer(this.weapon.muzzleWorld(), to);
     } else {

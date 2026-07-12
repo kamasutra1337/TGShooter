@@ -766,6 +766,106 @@ body,
   font-size: 13px;
 }
 
+/* ---- meta: rank + daily challenge ---- */
+#rank-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+#rank-badge {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+#xp-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+#xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  width: 0;
+  transition: width 0.4s ease;
+}
+#daily-challenge {
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+#dc-claim {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+#dc-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+#dc-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0;
+  transition: width 0.4s ease;
+}
+
+/* ---- result screen extras ---- */
+#result-mvp {
+  font-size: 15px;
+  color: #ffd166;
+  margin-bottom: 10px;
+}
+#result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.rs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 2px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.rs span {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+}
+.rs label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+#result-xp {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.lvlup {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {
   display: flex;
