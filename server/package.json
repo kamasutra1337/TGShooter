@@ -16,6 +16,7 @@
     "test:escrow": "tsx test/escrow.ts",
     "test:funding": "tsx test/funding.ts",
     "test:weapons": "tsx test/weapons.ts",
+    "test:loadout": "tsx test/loadout.ts",
     "test:rooms": "tsx test/rooms.ts"
   },
   "dependencies": {

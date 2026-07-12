@@ -1,6 +1,6 @@
 import { Room, type Conn } from "./Room";
 import type { InputMsg, Mode } from "../../shared/protocol";
-import type { WeaponId } from "../../shared/weapons";
+import { DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -59,13 +59,16 @@ export class Matchmaker {
       return;
     }
 
-    const key = `${mode}:${stake}`;
+    // Match by weapon too: you only ever face the same weapon you queued with
+    // (no sniper-vs-shotgun). Bots in this room use it as well.
+    const wpn = weapon ?? DEFAULT_WEAPON;
+    const key = `${mode}:${stake}:${wpn}`;
     let room = this.pending.get(key);
     if (!room) {
       const chainMatchId = ++this.chainSeq;
       room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, this.leaderboard, () => {
         for (const [id, r] of this.roomOf) if (r === room) this.roomOf.delete(id);
-      });
+      }, wpn);
       this.pending.set(key, room);
       // Only free matches fall back to bots; staked matches wait for humans.
       if (!staked) {

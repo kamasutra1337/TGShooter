@@ -200,6 +200,7 @@ export interface RoomStateMsg {
   code: string;
   players: RoomPlayer[];
   canStart: boolean;
+  weapon: WeaponId; // everyone plays the host's weapon
 }
 
 export interface RoomErrorMsg {

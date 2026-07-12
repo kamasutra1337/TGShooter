@@ -513,10 +513,17 @@ function leaveRoomToMenu(): void {
   setNet("");
 }
 
-function renderRoomPlayers(m: { players: { name: string; ready: boolean; host: boolean }[]; canStart: boolean }): void {
+function renderRoomPlayers(m: {
+  players: { name: string; ready: boolean; host: boolean }[];
+  canStart: boolean;
+  weapon?: WeaponId;
+}): void {
   btnRoomStart.disabled = !m.canStart;
   const seats = SEATS[roomInfo.mode];
   let html = "";
+  if (m.weapon) {
+    html += `<div class="room-weapon">🔫 Everyone plays the host's weapon: <b>${WEAPONS[m.weapon].name}</b></div>`;
+  }
   for (const p of m.players) {
     const tag = p.host
       ? '<span class="rp-tag host">HOST</span>'

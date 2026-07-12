@@ -97,6 +97,7 @@ export class Room {
   readonly seats: number;
   readonly pot: number;
   readonly chainMatchId: bigint; // on-chain escrow match id
+  readonly matchWeapon: WeaponId; // everyone in this match uses the same weapon
 
   private parts: Part[] = [];
   private tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -118,6 +119,7 @@ export class Room {
     escrow: EscrowService,
     leaderboard: Leaderboard,
     onClose: () => void,
+    matchWeapon: WeaponId = "rifle",
   ) {
     this.id = id;
     this.mode = mode;
@@ -125,6 +127,7 @@ export class Room {
     this.seats = SEATS[mode];
     this.pot = +(stake * this.seats).toFixed(3);
     this.chainMatchId = chainMatchId;
+    this.matchWeapon = matchWeapon;
     this.escrow = escrow;
     this.leaderboard = leaderboard;
     this.onClose = onClose;
@@ -155,9 +158,10 @@ export class Room {
   }
 
   addHuman(conn: Conn, name: string, wallet?: string, weapon?: WeaponId): void {
+    void weapon; // everyone in a match uses the same weapon (fair fights)
     const seat = this.parts.length;
     this.parts.push({
-      player: makePlayer(conn.id, spawnFor(this.mode, seat), weapon),
+      player: makePlayer(conn.id, spawnFor(this.mode, seat), this.matchWeapon),
       name,
       team: this.teamFor(seat),
       wallet,
@@ -175,10 +179,9 @@ export class Room {
     const seat = this.parts.length;
     const team = this.teamFor(seat);
     const botNames = ["Raider", "Viper", "Ghost", "Bravo", "Kilo", "Wolf", "Echo", "Fox", "Nova", "Zulu"];
-    // Bots carry auto weapons only (their aim is tuned for sustained fire).
-    const botWeapon: WeaponId = seat % 2 ? "smg" : "rifle";
+    // Bots use the SAME weapon as the match — no sniper-vs-shotgun mismatches.
     this.parts.push({
-      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat), botWeapon),
+      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat), this.matchWeapon),
       name: botNames[seat % botNames.length],
       team,
       conn: null,

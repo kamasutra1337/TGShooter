@@ -931,6 +931,19 @@ body,
   display: none;
 }
 
+.room-weapon {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: rgba(55, 224, 166, 0.08);
+  border: 1px solid rgba(55, 224, 166, 0.2);
+}
+.room-weapon b {
+  color: var(--accent);
+}
+
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {
   display: flex;

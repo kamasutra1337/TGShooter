@@ -1,6 +1,6 @@
 import { Room, type Conn } from "./Room";
 import { SEATS, type Mode, type InputMsg } from "../../shared/protocol";
-import type { WeaponId } from "../../shared/weapons";
+import { DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -126,6 +126,8 @@ export class PrivateRooms {
       }
     }
 
+    // Everyone in the room plays the HOST's weapon — fair, symmetric fights.
+    const hostWeapon = lobby.members.find((m) => m.conn.id === lobby.hostId)?.weapon ?? DEFAULT_WEAPON;
     const game = new Room(
       "priv-" + lobby.code,
       lobby.mode,
@@ -137,6 +139,7 @@ export class PrivateRooms {
         this.lobbies.delete(lobby.code);
         for (const m of lobby.members) this.lobbyOf.delete(m.conn.id);
       },
+      hostWeapon,
     );
     for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet, m.weapon);
     lobby.game = game;
@@ -221,11 +224,13 @@ export class PrivateRooms {
       ready: m.conn.id === lobby.hostId ? true : m.ready,
       host: m.conn.id === lobby.hostId,
     }));
+    const hostWeapon = lobby.members.find((m) => m.conn.id === lobby.hostId)?.weapon ?? DEFAULT_WEAPON;
     const msg = {
       t: "roomState" as const,
       code: lobby.code,
       players,
       canStart: this.canStart(lobby),
+      weapon: hostWeapon,
     };
     for (const m of lobby.members) m.conn.send(msg);
   }
