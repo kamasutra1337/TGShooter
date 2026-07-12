@@ -20,6 +20,7 @@ export interface JoinMsg {
   name: string;
   wallet?: string; // player's TON address (for on-chain payout), if connected
   weapon?: WeaponId; // chosen loadout (defaults to rifle)
+  map?: number; // chosen map id; omit for "random"
 }
 
 export interface InputMsg {
@@ -45,6 +46,7 @@ export interface CreateRoomMsg {
   name: string;
   wallet?: string;
   weapon?: WeaponId;
+  map?: number; // host's chosen map; omit for random
 }
 
 export interface JoinRoomMsg {
@@ -202,6 +204,7 @@ export interface RoomStateMsg {
   players: RoomPlayer[];
   canStart: boolean;
   weapon: WeaponId; // everyone plays the host's weapon
+  mapId: number; // the map the room will play
 }
 
 export interface RoomErrorMsg {

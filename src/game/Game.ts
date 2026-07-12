@@ -56,6 +56,7 @@ export interface MatchConfig {
   mode: Mode;
   stake: number;
   weapon?: WeaponId;
+  map?: number; // undefined = random
 }
 
 interface MatchState {
@@ -332,8 +333,9 @@ export class Game {
       running: true,
     };
 
-    // Random map each practice match, rebuilt from scratch.
-    this.arena.build(this.scene, Math.floor(Math.random() * MAPS.length));
+    // Chosen map (or random) each practice match, rebuilt from scratch.
+    const mapId = cfg.map != null ? cfg.map : Math.floor(Math.random() * MAPS.length);
+    this.arena.build(this.scene, mapId);
 
     // Clear old bots
     for (const b of this.bots) this.scene.remove(b.root);

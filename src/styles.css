@@ -217,10 +217,14 @@ body,
   color: var(--muted);
   margin-bottom: 6px;
 }
-#weapon-cards {
+#weapon-cards,
+#map-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+}
+#mapsel {
+  margin-top: 8px;
 }
 .weapon-card {
   display: flex;

@@ -23,6 +23,7 @@ interface Lobby {
   code: string;
   mode: Mode;
   stake: number;
+  mapId: number; // the map the host chose (fixed at create)
   hostId: string;
   members: Member[];
   game: Room | null;
@@ -60,12 +61,14 @@ export class PrivateRooms {
     name: string,
     wallet?: string,
     weapon?: WeaponId,
+    map?: number,
   ): void {
     const code = this.genCode();
     const lobby: Lobby = {
       code,
       mode,
       stake,
+      mapId: map != null ? map : Math.floor(Math.random() * MAPS.length),
       hostId: conn.id,
       members: [{ conn, name, wallet, weapon, ready: true }],
       game: null,
@@ -141,9 +144,7 @@ export class PrivateRooms {
         for (const m of lobby.members) this.lobbyOf.delete(m.conn.id);
       },
       hostWeapon,
-      process.env.MAP_ID != null && process.env.MAP_ID !== ""
-        ? Number(process.env.MAP_ID)
-        : Math.floor(Math.random() * MAPS.length),
+      lobby.mapId,
     );
     for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet, m.weapon);
     lobby.game = game;
@@ -235,6 +236,7 @@ export class PrivateRooms {
       players,
       canStart: this.canStart(lobby),
       weapon: hostWeapon,
+      mapId: lobby.mapId,
     };
     for (const m of lobby.members) m.conn.send(msg);
   }

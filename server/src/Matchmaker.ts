@@ -58,6 +58,7 @@ export class Matchmaker {
     name: string,
     wallet?: string,
     weapon?: WeaponId,
+    map?: number,
   ): void {
     const staked = this.staked(stake);
     // A staked seat needs a wallet to deposit from; refuse and let the client
@@ -67,16 +68,19 @@ export class Matchmaker {
       return;
     }
 
-    // Match by weapon too: you only ever face the same weapon you queued with
-    // (no sniper-vs-shotgun). Bots in this room use it as well.
+    // Match by weapon AND map: you only face the same weapon + map you queued
+    // with. Players who left the map on "random" (map == null) pool together
+    // under one key and get a random map. Bots in the room use the same weapon.
     const wpn = weapon ?? DEFAULT_WEAPON;
-    const key = `${mode}:${stake}:${wpn}`;
+    const mapPart = map != null ? String(map) : "r";
+    const roomMap = map != null ? map : pickMapId();
+    const key = `${mode}:${stake}:${wpn}:${mapPart}`;
     let room = this.pending.get(key);
     if (!room) {
       const chainMatchId = ++this.chainSeq;
       room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, this.leaderboard, () => {
         for (const [id, r] of this.roomOf) if (r === room) this.roomOf.delete(id);
-      }, wpn, pickMapId());
+      }, wpn, roomMap);
       this.pending.set(key, room);
       // Only free matches fall back to bots; staked matches wait for humans.
       if (!staked) {

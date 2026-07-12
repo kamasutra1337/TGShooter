@@ -153,12 +153,19 @@ export class NetworkClient {
     this.send({ t: "deposited" });
   }
 
-  join(mode: Mode, stake: number, name: string, wallet?: string, weapon?: WeaponId): void {
-    this.send({ t: "join", mode, stake, name, wallet, weapon });
+  join(mode: Mode, stake: number, name: string, wallet?: string, weapon?: WeaponId, map?: number): void {
+    this.send({ t: "join", mode, stake, name, wallet, weapon, map });
   }
 
-  createRoom(mode: Mode, stake: number, name: string, wallet?: string, weapon?: WeaponId): void {
-    this.send({ t: "createRoom", mode, stake, name, wallet, weapon });
+  createRoom(
+    mode: Mode,
+    stake: number,
+    name: string,
+    wallet?: string,
+    weapon?: WeaponId,
+    map?: number,
+  ): void {
+    this.send({ t: "createRoom", mode, stake, name, wallet, weapon, map });
   }
   joinRoom(code: string, name: string, wallet?: string, weapon?: WeaponId): void {
     this.send({ t: "joinRoom", code, name, wallet, weapon });

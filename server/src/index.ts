@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { Address } from "@ton/core";
 import { TonClient } from "@ton/ton";
 import { WEAPON_IDS, type WeaponId } from "../../shared/weapons";
+import { MAPS } from "../../shared/arena";
 import { loadEnv } from "./ton/env";
 import { FundingCoordinator } from "./Funding";
 import { Matchmaker } from "./Matchmaker";
@@ -97,10 +98,10 @@ wss.on("connection", (ws: WebSocket) => {
     }
     if (msg.t === "join" && !joined) {
       joined = true;
-      mm.join(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon));
+      mm.join(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon), validMap(msg.map));
     } else if (msg.t === "createRoom" && !joined) {
       joined = true;
-      pr.create(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon));
+      pr.create(conn, normMode(msg.mode), clampStake(msg.stake), normName(msg.name), validWallet(msg.wallet), validWeapon(msg.weapon), validMap(msg.map));
     } else if (msg.t === "joinRoom" && !joined) {
       joined = true;
       const code = String(msg.code ?? "").replace(/\D/g, "").slice(0, 4);
@@ -160,6 +161,11 @@ function validWallet(v: unknown): string | undefined {
 
 function validWeapon(v: unknown): WeaponId | undefined {
   return (WEAPON_IDS as string[]).includes(v as string) ? (v as WeaponId) : undefined;
+}
+
+function validMap(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n < MAPS.length ? n : undefined;
 }
 
 httpServer.listen(PORT, () => {

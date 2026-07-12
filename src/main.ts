@@ -3,6 +3,7 @@ import "./styles.css";
 import { Game, type Mode } from "./game/Game";
 import { SEATS } from "../shared/protocol";
 import { WEAPONS, WEAPON_IDS, DEFAULT_WEAPON, type WeaponId } from "../shared/weapons";
+import { MAPS } from "../shared/arena";
 import { Telegram } from "./platform/telegram";
 import { Ton } from "./platform/ton";
 import { NetworkClient } from "./net/NetworkClient";
@@ -163,6 +164,38 @@ function renderWeaponCards(): void {
 renderWeaponCards();
 renderWeaponDetail();
 
+// ---- map picker (-1 = random) ----
+const MAP_ICON = ["🏭", "🔀", "📦"];
+function loadMap(): number {
+  const raw = localStorage.getItem("tgs-map");
+  if (raw == null) return -1; // default: Random
+  const v = Number(raw);
+  return Number.isInteger(v) && v >= -1 && v < MAPS.length ? v : -1;
+}
+let selectedMap: number = loadMap();
+const mapCards = document.getElementById("map-cards")!;
+function renderMapCards(): void {
+  mapCards.innerHTML = "";
+  const opts: { id: number; name: string; icon: string }[] = [
+    { id: -1, name: "Random", icon: "🎲" },
+    ...MAPS.map((m) => ({ id: m.id, name: m.name, icon: MAP_ICON[m.id] ?? "🗺️" })),
+  ];
+  for (const o of opts) {
+    const btn = document.createElement("button");
+    btn.className = "weapon-card" + (o.id === selectedMap ? " active" : "");
+    btn.innerHTML = `<span class="wc-icon">${o.icon}</span><span class="wc-name">${o.name}</span>`;
+    btn.addEventListener("click", () => {
+      selectedMap = o.id;
+      localStorage.setItem("tgs-map", String(o.id));
+      renderMapCards();
+    });
+    mapCards.appendChild(btn);
+  }
+}
+renderMapCards();
+// map id to send to the server (undefined = random)
+const chosenMap = () => (selectedMap >= 0 ? selectedMap : undefined);
+
 // ---- meta: rank + daily challenge ----
 const rankBadge = document.getElementById("rank-badge")!;
 const xpFill = document.getElementById("xp-fill")!;
@@ -303,6 +336,7 @@ btnPlay.addEventListener("click", async () => {
     Telegram.user()?.name ?? "Player",
     Ton.getState().address ?? undefined,
     selectedWeapon,
+    chosenMap(),
   );
 });
 
@@ -311,7 +345,10 @@ btnPractice.addEventListener("click", () => {
   const stake = parseFloat(stakeSelect.value);
   setNet("");
   enterMatch();
-  game.startMatch({ mode, stake, weapon: selectedWeapon }, (win, payout) => showResult(win, payout));
+  game.startMatch(
+    { mode, stake, weapon: selectedWeapon, map: chosenMap() },
+    (win, payout) => showResult(win, payout),
+  );
 });
 
 // ---- weekly leaderboard ----
@@ -535,12 +572,14 @@ function renderRoomPlayers(m: {
   players: { name: string; ready: boolean; host: boolean }[];
   canStart: boolean;
   weapon?: WeaponId;
+  mapId?: number;
 }): void {
   btnRoomStart.disabled = !m.canStart;
   const seats = SEATS[roomInfo.mode];
   let html = "";
   if (m.weapon) {
-    html += `<div class="room-weapon">🔫 Everyone plays the host's weapon: <b>${WEAPONS[m.weapon].name}</b></div>`;
+    const mapName = m.mapId != null && MAPS[m.mapId] ? MAPS[m.mapId].name : "";
+    html += `<div class="room-weapon">🔫 <b>${WEAPONS[m.weapon].name}</b>${mapName ? ` · 🗺️ <b>${mapName}</b>` : ""} — set by host</div>`;
   }
   for (const p of m.players) {
     const tag = p.host
@@ -610,7 +649,7 @@ btnCreateRoom.addEventListener("click", async () => {
   setNet("");
   roomNet = net;
   wireRoom(net);
-  net.createRoom(mode, parseFloat(stakeSelect.value), playerName(), Ton.getState().address ?? undefined, selectedWeapon);
+  net.createRoom(mode, parseFloat(stakeSelect.value), playerName(), Ton.getState().address ?? undefined, selectedWeapon, chosenMap());
 });
 
 btnJoinRoom.addEventListener("click", () => {
