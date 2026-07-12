@@ -1,0 +1,14 @@
+# Nixpacks build for the TG Shooter game server (authoritative WebSocket server).
+# The repo-root package.json is the CLIENT (Vite); on Railway we only want the
+# SERVER, which reads the sibling shared/ dir at runtime via tsx. So we override
+# install/build to target server/ and skip the client build entirely.
+providers = ["node"]
+
+[phases.install]
+cmds = ["npm install --prefix server --no-audit --no-fund"]
+
+[phases.build]
+cmds = ["echo 'no build step — server runs TypeScript via tsx'"]
+
+[start]
+cmd = "npm --prefix server start"
