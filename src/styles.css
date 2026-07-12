@@ -651,6 +651,104 @@ body,
   background: rgba(55, 224, 166, 0.4);
   border-color: var(--accent);
 }
+#btn-score {
+  right: max(220px, calc(env(safe-area-inset-right) + 198px));
+  bottom: 340px;
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+}
+
+/* ---- awareness HUD ---- */
+#match-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 2px;
+}
+#minimap {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+  opacity: 0.92;
+}
+#dmg-dir {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.dmg-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #ff4444;
+  font-size: 26px;
+  text-shadow: 0 0 8px rgba(255, 0, 0, 0.7);
+  animation: dmgFade 0.9s ease-out forwards;
+}
+@keyframes dmgFade {
+  from {
+    opacity: 0.95;
+  }
+  to {
+    opacity: 0;
+  }
+}
+#scoreboard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 300px;
+  max-width: 82vw;
+  background: rgba(10, 14, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 14px 16px;
+  pointer-events: none;
+  z-index: 20;
+}
+.sb-title {
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+.sb-row.t0 {
+  border-left: 3px solid #4aa8ff;
+}
+.sb-row.t1 {
+  border-left: 3px solid #ff5a5a;
+}
+.sb-row.you {
+  background: rgba(55, 224, 166, 0.16);
+  font-weight: 700;
+}
+.sb-row.dead {
+  opacity: 0.45;
+}
+.sb-k {
+  font-weight: 800;
+  color: var(--accent);
+}
 
 /* ---------- Menu actions + panels (settings, rooms) ---------- */
 #menu-actions {

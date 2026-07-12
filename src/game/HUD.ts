@@ -19,6 +19,9 @@ export class HUD {
   private teamFoe = document.getElementById("team-foe")!;
   private countdownEl = document.getElementById("countdown")!;
   private chatFeed = document.getElementById("chat-feed")!;
+  private matchTimer = document.getElementById("match-timer")!;
+  private scoreboard = document.getElementById("scoreboard")!;
+  private dmgDir = document.getElementById("dmg-dir")!;
 
   private lastHealth = -1;
   private lastMag = -1;
@@ -126,6 +129,40 @@ export class HUD {
 
   setWeapon(name: string): void {
     if (this.weaponName) this.weaponName.textContent = name;
+  }
+
+  setTimer(seconds: number): void {
+    const s = Math.max(0, Math.floor(seconds));
+    this.matchTimer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  // rows: [{ name, kills, team, alive, you }]
+  showScoreboard(
+    rows: { name: string; kills: number; team: number; alive: boolean; you: boolean }[],
+    teamMode: boolean,
+  ): void {
+    const line = (r: (typeof rows)[number]) =>
+      `<div class="sb-row ${r.you ? "you" : ""} ${r.team === 0 ? "t0" : "t1"}${r.alive ? "" : " dead"}">` +
+      `<span class="sb-name">${esc(r.name)}</span><span class="sb-k">${r.kills}</span></div>`;
+    const sorted = [...rows].sort((a, b) => a.team - b.team || b.kills - a.kills);
+    this.scoreboard.innerHTML =
+      `<div class="sb-title">${teamMode ? "TEAM SCOREBOARD" : "SCOREBOARD"}</div>` +
+      sorted.map(line).join("");
+    this.scoreboard.classList.remove("hidden");
+  }
+  hideScoreboard(): void {
+    this.scoreboard.classList.add("hidden");
+  }
+
+  // Show a chevron pointing toward where damage came from (angle in radians,
+  // 0 = in front, +clockwise). Fades out.
+  damageDirection(angle: number): void {
+    const el = document.createElement("div");
+    el.className = "dmg-arrow";
+    el.textContent = "▲";
+    el.style.transform = `translate(-50%, -50%) rotate(${angle}rad) translateY(-120px)`;
+    this.dmgDir.appendChild(el);
+    setTimeout(() => el.remove(), 900);
   }
 
   setScore(s: number): void {

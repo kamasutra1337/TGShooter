@@ -13,6 +13,7 @@ import { RemoteAvatar } from "./RemoteAvatar";
 import { Nametags, type Tag } from "./Nametags";
 import { Effects } from "./Effects";
 import { Grenades } from "./Grenades";
+import { Minimap, type Blip } from "./Minimap";
 import { Sound } from "./Audio";
 import { Telegram } from "../platform/telegram";
 // Local match bookkeeping (practice/offline). Online payouts come from the
@@ -46,6 +47,8 @@ interface OnlineState {
   names: Map<string, string>;
   teams: Map<string, number>;
   spectateId: string | null; // teammate being followed while dead
+  roster: Map<string, { x: number; z: number; team: number; alive: boolean; kills: number }>;
+  startT: number; // performance.now() at match start (for the timer)
 }
 
 export interface MatchConfig {
@@ -77,6 +80,7 @@ export class Game {
   private nametags = new Nametags();
   private effects: Effects;
   private grenades: Grenades;
+  private minimap: Minimap;
   private baseFov = 78;
   private input: Input;
   private bots: Bot[] = [];
@@ -114,6 +118,7 @@ export class Game {
     this.weapon = new Weapon(this.scene);
     this.effects = new Effects(this.scene);
     this.grenades = new Grenades(this.scene, this.effects);
+    this.minimap = new Minimap(document.getElementById("minimap") as HTMLCanvasElement);
     this.input = new Input(canvas);
 
     // Camera must be in the scene graph so its first-person viewmodel renders.
@@ -549,6 +554,8 @@ export class Game {
       names,
       teams,
       spectateId: null,
+      roster: new Map(),
+      startT: performance.now(),
     };
 
     net.setHandlers({
@@ -587,6 +594,29 @@ export class Game {
   private onlineFrame(dt: number): void {
     const o = this.online!;
     this.grenades.update(dt);
+    this.hud.setTimer((performance.now() - o.startT) / 1000);
+
+    // radar
+    const blips: Blip[] = [];
+    for (const [id, r] of o.roster) {
+      if (id === o.youId) continue;
+      blips.push({ x: r.x, z: r.z, team: r.team, alive: r.alive });
+    }
+    this.minimap.draw(this.player.position.x, this.player.position.z, this.player.viewYaw(), o.youTeam, blips);
+
+    // scoreboard (hold)
+    if (this.input.state.scoreboard) {
+      const rows = [...o.roster.entries()].map(([id, r]) => ({
+        name: o.names.get(id) ?? "Player",
+        kills: r.kills,
+        team: r.team,
+        alive: r.alive,
+        you: id === o.youId,
+      }));
+      this.hud.showScoreboard(rows, o.mode === "elimination");
+    } else {
+      this.hud.hideScoreboard();
+    }
 
     if (this.player.alive) {
       this.weapon.showViewmodel(true);
@@ -680,6 +710,9 @@ export class Game {
     const o = this.online;
     if (!o || !o.running) return;
     for (const s of m.players) {
+      o.roster.set(s.id, { x: s.x, z: s.z, team: s.team, alive: s.alive, kills: s.score });
+    }
+    for (const s of m.players) {
       if (s.id === o.youId) {
         o.ammo = s.ammo;
         this.hud.setHealth(s.health);
@@ -748,6 +781,14 @@ export class Game {
       this.hud.damageFlashPulse();
       Sound.hurt();
       Telegram.haptic("heavy");
+      // directional damage arrow: where did the attacker fire from?
+      const from = o.roster.get(m.by);
+      if (from) {
+        const dx = from.x - this.player.position.x;
+        const dz = from.z - this.player.position.z;
+        const worldAngle = Math.atan2(dx, -dz); // 0 = -z (forward)
+        this.hud.damageDirection(worldAngle - this.player.viewYaw());
+      }
     }
   }
 
@@ -801,6 +842,8 @@ export class Game {
       this.online.avatars.clear();
     }
     this.grenades.clear();
+    this.minimap.clear();
+    this.hud.hideScoreboard();
     this.net?.close();
     this.net = null;
     this.online = null;

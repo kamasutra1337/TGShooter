@@ -14,6 +14,7 @@ export interface InputState {
   crouch: boolean; // toggled
   ads: boolean; // aim-down-sights (hold)
   throwQueued: boolean; // edge: grenade throw
+  scoreboard: boolean; // hold to show the scoreboard
 }
 
 export class Input {
@@ -29,6 +30,7 @@ export class Input {
     crouch: false,
     ads: false,
     throwQueued: false,
+    scoreboard: false,
   };
 
   sensitivity = 0.0022;
@@ -94,12 +96,17 @@ export class Input {
       if (e.code === "KeyG") this.state.throwQueued = true;
       if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.state.sprint = true;
       if (e.code === "ControlLeft" || e.code === "KeyC") this.state.crouch = true;
+      if (e.code === "Tab") {
+        this.state.scoreboard = true;
+        e.preventDefault();
+      }
       this.recomputeKeys();
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
       if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.state.sprint = false;
       if (e.code === "ControlLeft" || e.code === "KeyC") this.state.crouch = false;
+      if (e.code === "Tab") this.state.scoreboard = false;
       this.recomputeKeys();
     });
 
@@ -266,6 +273,12 @@ export class Input {
     const nadeBtn = document.getElementById("btn-nade");
     nadeBtn?.addEventListener("touchstart", (e) => {
       this.state.throwQueued = true;
+      e.preventDefault();
+    });
+    const scoreBtn = document.getElementById("btn-score");
+    scoreBtn?.addEventListener("touchstart", (e) => {
+      this.state.scoreboard = !this.state.scoreboard; // tap toggles
+      scoreBtn.classList.toggle("active", this.state.scoreboard);
       e.preventDefault();
     });
   }
