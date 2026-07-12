@@ -287,7 +287,7 @@ export class Room {
         }
       }
 
-      stepMovement(p.player, p.input, dt, this.map.colliders);
+      stepMovement(p.player, p.input, dt, this.map.colliders, this.map.half);
       stepWeapon(p.player, p.input, dt);
     }
 

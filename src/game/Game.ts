@@ -281,7 +281,7 @@ export class Game {
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 130;
-    const d = 34;
+    const d = 42; // covers the big Compound map too
     sun.shadow.camera.left = -d;
     sun.shadow.camera.right = d;
     sun.shadow.camera.top = d;
@@ -344,23 +344,23 @@ export class Game {
 
     const enemyCount = cfg.mode === "duel" ? 1 : 5; // practice: 5 enemy bots
     const names = ["Raider", "Viper", "Ghost", "Bravo", "Kilo"];
-    // Duel: opponent faces off in front of the player. Elimination: spread out.
-    const duelSpawn = new THREE.Vector3(0, 0, -12);
+    // Spawn from the map's own spawn points so nobody starts inside cover.
+    const sp = this.arena.spawns;
+    const duelSpawn = sp[1] ?? new THREE.Vector3(0, 0, -12);
     for (let i = 0; i < enemyCount; i++) {
       const bot = new Bot();
       this.scene.add(bot.root);
       const spawn =
-        cfg.mode === "duel"
-          ? duelSpawn
-          : this.arena.spawns[(i + 1) % this.arena.spawns.length];
+        cfg.mode === "duel" ? duelSpawn : sp[(i + 1) % sp.length];
       bot.spawn(spawn);
       bot.home.copy(spawn); // fixed respawn point (no spawn drift/spam)
       bot.name = names[i % names.length];
       this.bots.push(bot);
     }
 
-    // Reset player + configure the chosen weapon (sets mag/reserve from spec)
-    this.player.reset(new THREE.Vector3(0, 1.6, 20), 0);
+    // Reset player at the map's first spawn (facing into the arena).
+    const p0 = sp[0] ?? new THREE.Vector3(0, 0, 20);
+    this.player.reset(new THREE.Vector3(p0.x, p0.y + EYE, p0.z), p0.z > 0 ? 0 : Math.PI);
     this.weapon.configure(cfg.weapon ?? DEFAULT_WEAPON);
     this.resetStats();
     this.effects.clearDecals();

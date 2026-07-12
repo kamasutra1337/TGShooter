@@ -31,6 +31,7 @@ export interface AABB {
 export interface GameMap {
   id: number;
   name: string;
+  half: number; // half arena size (bigger = larger map)
   boxes: MapBox[];
   colliders: AABB[]; // derived
   spawns: [number, number, number][]; // duel
@@ -41,13 +42,16 @@ function toAABB([x, y, z, w, h, d]: Box6): AABB {
   return { minX: x - w / 2, minY: y - h / 2, minZ: z - d / 2, maxX: x + w / 2, maxY: y + h / 2, maxZ: z + d / 2 };
 }
 
-// Perimeter walls, shared by every map.
-const WALLS: MapBox[] = [
-  { b: [0, 3, -24, 48, 6, 1], kind: "wall" },
-  { b: [0, 3, 24, 48, 6, 1], kind: "wall" },
-  { b: [-24, 3, 0, 1, 6, 48], kind: "wall" },
-  { b: [24, 3, 0, 1, 6, 48], kind: "wall" },
-];
+// Perimeter walls scaled to a map's half size.
+function wallsFor(half: number): MapBox[] {
+  const s = half * 2;
+  return [
+    { b: [0, 3, -half, s, 6, 1], kind: "wall" },
+    { b: [0, 3, half, s, 6, 1], kind: "wall" },
+    { b: [-half, 3, 0, 1, 6, s], kind: "wall" },
+    { b: [half, 3, 0, 1, 6, s], kind: "wall" },
+  ];
+}
 
 // Team spawns are always 5 on the +z side (team 0) and 5 on the -z side (team 1).
 const TEAM_ROWS: [number, number, number][][] = [
@@ -76,15 +80,18 @@ function makeMap(
   name: string,
   interior: MapBox[],
   extraDuel: [number, number, number][] = [],
+  opts: { half?: number; spawns?: [number, number, number][]; teamSpawns?: [number, number, number][][] } = {},
 ): GameMap {
-  const boxes = [...WALLS, ...interior];
+  const half = opts.half ?? 24;
+  const boxes = [...wallsFor(half), ...interior];
   return {
     id,
     name,
+    half,
     boxes,
     colliders: boxes.map((mb) => toAABB(mb.b)),
-    spawns: [DUEL_A, DUEL_B, ...extraDuel],
-    teamSpawns: TEAM_ROWS,
+    spawns: opts.spawns ?? [DUEL_A, DUEL_B, ...extraDuel],
+    teamSpawns: opts.teamSpawns ?? TEAM_ROWS,
   };
 }
 
@@ -163,7 +170,70 @@ const MAZE = makeMap(
   ],
 );
 
-export const MAPS: GameMap[] = [DEPOT, FORTRESS, MAZE];
+// --- Map 3: COMPOUND — a BIG open arena built for 5v5. Twice the footprint of
+// the others (half 36 → 72×72), long lanes, a central building cluster, mid-field
+// cover, and team spawns pushed far apart. Mirror-symmetric.
+const COMPOUND = makeMap(
+  3,
+  "Compound",
+  [
+    // central building cluster (a plus)
+    { b: [0, 1.5, 0, 12, 3, 4], kind: "container" },
+    { b: [0, 1.5, 0, 4, 3, 12], kind: "container" },
+    // inner flank structures
+    { b: [-15, 1.5, 0, 3, 3, 9], kind: "container" },
+    { b: [15, 1.5, 0, 3, 3, 9], kind: "container" },
+    // mid-field platforms between spawns and centre
+    { b: [0, 1.5, 21, 7, 3, 3], kind: "platform" },
+    { b: [0, 1.5, -21, 7, 3, 3], kind: "platform" },
+    // diagonal barriers
+    { b: [-17, 1.5, 16, 4, 3, 4], kind: "barrier" },
+    { b: [17, 1.5, -16, 4, 3, 4], kind: "barrier" },
+    { b: [17, 1.5, 16, 4, 3, 4], kind: "barrier" },
+    { b: [-17, 1.5, -16, 4, 3, 4], kind: "barrier" },
+    // outer lane walls
+    { b: [-26, 1.5, 8, 2, 3, 12], kind: "container" },
+    { b: [26, 1.5, -8, 2, 3, 12], kind: "container" },
+    { b: [26, 1.5, 8, 2, 3, 12], kind: "container" },
+    { b: [-26, 1.5, -8, 2, 3, 12], kind: "container" },
+    // forward crates near spawns
+    { b: [-10, 1.1, 26, 3, 2.2, 3], kind: "crate" },
+    { b: [10, 1.1, -26, 3, 2.2, 3], kind: "crate" },
+    { b: [10, 1.1, 26, 3, 2.2, 3], kind: "crate" },
+    { b: [-10, 1.1, -26, 3, 2.2, 3], kind: "crate" },
+    // corner cover
+    { b: [-28, 1.1, 28, 3, 2.2, 3], kind: "crate" },
+    { b: [28, 1.1, -28, 3, 2.2, 3], kind: "crate" },
+  ],
+  [],
+  {
+    half: 36,
+    spawns: [
+      [0, 0, 32],
+      [0, 0, -32],
+      [-28, 0, 30],
+      [28, 0, -30],
+    ],
+    teamSpawns: [
+      [
+        [-16, 0, 31],
+        [-8, 0, 32],
+        [0, 0, 31],
+        [8, 0, 32],
+        [16, 0, 31],
+      ],
+      [
+        [-16, 0, -31],
+        [-8, 0, -32],
+        [0, 0, -31],
+        [8, 0, -32],
+        [16, 0, -31],
+      ],
+    ],
+  },
+);
+
+export const MAPS: GameMap[] = [DEPOT, FORTRESS, MAZE, COMPOUND];
 
 export function mapById(id: number): GameMap {
   return MAPS[id] ?? MAPS[0];

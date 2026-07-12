@@ -32,7 +32,7 @@ const CONTAINER_COLORS = [0x9c4a35, 0x35618f, 0xb0892f, 0x4a7a52, 0x7a4a6a];
 export class Arena {
   group = new THREE.Group();
   solids: THREE.Object3D[] = []; // raycast targets for the offline weapon
-  readonly halfSize = HALF_SIZE;
+  halfSize = HALF_SIZE; // per-map (set in build)
   spawns: THREE.Vector3[] = [];
   private colliders: AABB[] = MAPS[0].colliders;
   map: GameMap = MAPS[0];
@@ -52,6 +52,7 @@ export class Arena {
     const map = mapById(mapId);
     this.map = map;
     this.colliders = map.colliders;
+    this.halfSize = map.half;
     scene.add(this.group);
 
     // Floor — textured asphalt with surface relief
@@ -145,24 +146,26 @@ export class Arena {
   }
 
   private addDecoration(): void {
+    // Push perimeter dressing out to this map's edge.
+    const e = this.halfSize - 2; // just inside the wall
     const barrelSpots: [number, number, number, number][] = [
-      [20.5, 0, -20.5, 0xb23b2e],
-      [19.6, 0, -21, 0x2e6bb2],
-      [-20.5, 0, 20.5, 0x2e6bb2],
-      [-21, 0, 19.6, 0xb2892e],
-      [22, 0, 6, 0xb23b2e],
-      [-22, 0, -6, 0x4a7a3a],
+      [e - 1.5, 0, -(e - 1.5), 0xb23b2e],
+      [e - 2.4, 0, -e, 0x2e6bb2],
+      [-(e - 1.5), 0, e - 1.5, 0x2e6bb2],
+      [-e, 0, e - 2.4, 0xb2892e],
+      [e, 0, 6, 0xb23b2e],
+      [-e, 0, -6, 0x4a7a3a],
     ];
     for (const [x, y, z, c] of barrelSpots) {
       const b = barrel(c);
       b.position.set(x, y, z);
-      b.rotation.y = (x + z) * 0.3; // deterministic-ish orientation
+      b.rotation.y = (x + z) * 0.3;
       this.group.add(b);
     }
     for (const [x, z] of [
-      [-21, -18],
-      [21, 18],
-      [21, -21],
+      [-(e - 1), -(e - 4)],
+      [e - 1, e - 4],
+      [e - 1, -(e - 1)],
     ] as const) {
       const s = crateStack();
       s.position.set(x, 0, z);
@@ -170,10 +173,10 @@ export class Arena {
       this.group.add(s);
     }
     const bags = sandbagWall(4, 0.9, 0.6);
-    bags.position.set(-6, 0.45, 22.2);
+    bags.position.set(-6, 0.45, this.halfSize - 1.8);
     this.group.add(bags);
     const bags2 = sandbagWall(4, 0.9, 0.6);
-    bags2.position.set(8, 0.45, -22.2);
+    bags2.position.set(8, 0.45, -(this.halfSize - 1.8));
     this.group.add(bags2);
   }
 

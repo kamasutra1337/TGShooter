@@ -114,7 +114,13 @@ export function respawn(p: SimPlayer, feet: [number, number, number]): void {
   p.reloadT = 0;
 }
 
-export function stepMovement(p: SimPlayer, input: SimInput, dt: number, colliders: AABB[]): void {
+export function stepMovement(
+  p: SimPlayer,
+  input: SimInput,
+  dt: number,
+  colliders: AABB[],
+  half: number = HALF_SIZE,
+): void {
   if (!p.alive) return;
   p.yaw = input.yaw;
   p.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, input.pitch));
@@ -171,7 +177,7 @@ export function stepMovement(p: SimPlayer, input: SimInput, dt: number, collider
 
   resolveCollision(p.pos, RADIUS, colliders);
 
-  const lim = HALF_SIZE - RADIUS - 0.6;
+  const lim = half - RADIUS - 0.6;
   p.pos.x = Math.max(-lim, Math.min(lim, p.pos.x));
   p.pos.z = Math.max(-lim, Math.min(lim, p.pos.z));
 

@@ -217,11 +217,18 @@ body,
   color: var(--muted);
   margin-bottom: 6px;
 }
-#weapon-cards,
-#map-cards {
+#weapon-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+}
+#map-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+#map-cards .wc-name {
+  font-size: 9px;
 }
 #mapsel {
   margin-top: 8px;
