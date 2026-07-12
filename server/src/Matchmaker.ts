@@ -1,6 +1,14 @@
 import { Room, type Conn } from "./Room";
 import type { InputMsg, Mode } from "../../shared/protocol";
 import { DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
+import { MAPS } from "../../shared/arena";
+
+// Random map per match, or a fixed one via MAP_ID (for deterministic tests).
+function pickMapId(): number {
+  const env = process.env.MAP_ID;
+  if (env != null && env !== "") return Math.max(0, Math.min(MAPS.length - 1, Number(env)));
+  return Math.floor(Math.random() * MAPS.length);
+}
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -68,7 +76,7 @@ export class Matchmaker {
       const chainMatchId = ++this.chainSeq;
       room = new Room("room-" + ++this.seq, mode, stake, chainMatchId, this.escrow, this.leaderboard, () => {
         for (const [id, r] of this.roomOf) if (r === room) this.roomOf.delete(id);
-      }, wpn);
+      }, wpn, pickMapId());
       this.pending.set(key, room);
       // Only free matches fall back to bots; staked matches wait for humans.
       if (!staked) {

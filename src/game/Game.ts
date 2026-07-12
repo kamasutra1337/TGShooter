@@ -26,7 +26,7 @@ interface StakeInfo {
 }
 import { NetworkClient } from "../net/NetworkClient";
 import type { MatchStartMsg, HitEventMsg, ShotEventMsg, SnapshotMsg } from "../../shared/protocol";
-import { spawnFor } from "../../shared/arena";
+import { spawnFor, MAPS } from "../../shared/arena";
 import { SEATS } from "../../shared/protocol";
 import { EYE } from "../../shared/sim";
 import { WEAPONS, DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
@@ -332,6 +332,9 @@ export class Game {
       running: true,
     };
 
+    // Random map each practice match, rebuilt from scratch.
+    this.arena.build(this.scene, Math.floor(Math.random() * MAPS.length));
+
     // Clear old bots
     for (const b of this.bots) this.scene.remove(b.root);
     this.bots = [];
@@ -607,6 +610,9 @@ export class Game {
     );
     this.applyTheme(THEMES[seed % THEMES.length]);
 
+    // Build the arena the server chose for this match.
+    this.arena.build(this.scene, start.mapId);
+
     // clear any offline bots
     for (const b of this.bots) this.scene.remove(b.root);
     this.bots = [];
@@ -617,7 +623,7 @@ export class Game {
       start.players.findIndex((p) => p.id === youId),
     );
     const youTeam = start.players[seat]?.team ?? 0;
-    const feet = spawnFor(mode, seat);
+    const feet = spawnFor(this.arena.map, mode, seat);
     // team 0 spawns +z facing -z (yaw 0); team 1 spawns -z facing +z (yaw π)
     this.player.reset(
       new THREE.Vector3(feet[0], feet[1] + EYE, feet[2]),

@@ -2,7 +2,6 @@ import * as THREE from "three";
 import type { Arena } from "./Arena";
 import type { Player } from "./Player";
 import { buildSoldier, animateSoldier, type SoldierHandles } from "./models/Soldier";
-import { rayArena } from "../../shared/arena";
 
 // Enemy bot: a fully-modelled soldier with a tagged head mesh (headshots).
 // AI states: wander → chase when it sees the player → shoot on a timer with
@@ -127,7 +126,7 @@ export class Bot {
 
     // Shooting — only with a clear line of sight (no shooting through cover).
     let dealt = 0;
-    if (this.state === "chase" && dist < 26 && this.hasLineOfSight(player)) {
+    if (this.state === "chase" && dist < 26 && this.hasLineOfSight(player, arena)) {
       this.shootTimer -= dt;
       if (this.shootTimer <= 0) {
         this.shootTimer = 1.1 + Math.random() * 0.9;
@@ -139,7 +138,7 @@ export class Bot {
     return dealt;
   }
 
-  private hasLineOfSight(player: Player): boolean {
+  private hasLineOfSight(player: Player, arena: Arena): boolean {
     const ex = this.position.x;
     const ey = this.position.y + 1.6; // bot eye
     const ez = this.position.z;
@@ -147,7 +146,7 @@ export class Bot {
     const dy = player.position.y - ey;
     const dz = player.position.z - ez;
     const dist = Math.hypot(dx, dy, dz) || 1;
-    const wall = rayArena(ex, ey, ez, dx / dist, dy / dist, dz / dist);
+    const wall = arena.rayArena(ex, ey, ez, dx / dist, dy / dist, dz / dist);
     return wall >= dist - 0.5; // no box/wall between us
   }
 }

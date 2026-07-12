@@ -1,10 +1,14 @@
 import * as THREE from "three";
 import {
-  COLLIDERS,
-  SPAWNS,
   HALF_SIZE,
+  MAPS,
+  mapById,
   resolveCollision as sharedResolve,
   groundHeight as sharedGround,
+  rayArena as sharedRay,
+  type GameMap,
+  type BoxKind,
+  type AABB,
 } from "../../shared/arena";
 import {
   woodenCrate,
@@ -17,21 +21,37 @@ import {
 } from "./models/Props";
 import { asphalt, concrete } from "./textures";
 
-// Renders the arena from the SHARED collider list. Each collider is skinned with
-// a realistic prop for looks, plus an INVISIBLE box proxy that carries the exact
-// AABB for bullet raycasts — so collision + hit-stop match the server precisely,
-// no matter how detailed the visible prop is. Free-standing decoration (barrels,
-// crate stacks) is visual only.
+// Renders one arena (map) from the SHARED, typed box list. Each collider is
+// skinned with a realistic prop for looks, plus an INVISIBLE box proxy carrying
+// the exact AABB for bullet raycasts — so collision + hit-stop match the server
+// precisely. Collision math is delegated to the shared implementation using this
+// map's colliders, so client prediction and the server agree.
 
 const CONTAINER_COLORS = [0x9c4a35, 0x35618f, 0xb0892f, 0x4a7a52, 0x7a4a6a];
 
 export class Arena {
-  readonly group = new THREE.Group();
-  readonly solids: THREE.Object3D[] = []; // raycast targets for the offline weapon
+  group = new THREE.Group();
+  solids: THREE.Object3D[] = []; // raycast targets for the offline weapon
   readonly halfSize = HALF_SIZE;
-  readonly spawns: THREE.Vector3[] = [];
+  spawns: THREE.Vector3[] = [];
+  private colliders: AABB[] = MAPS[0].colliders;
+  map: GameMap = MAPS[0];
 
-  build(scene: THREE.Scene): void {
+  // Build (or rebuild) the arena for a given map id.
+  build(scene: THREE.Scene, mapId = 0): void {
+    // tear down any previous map
+    scene.remove(this.group);
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+    });
+    this.group = new THREE.Group();
+    this.solids = [];
+    this.spawns = [];
+
+    const map = mapById(mapId);
+    this.map = map;
+    this.colliders = map.colliders;
     scene.add(this.group);
 
     // Floor — textured asphalt with surface relief
@@ -54,60 +74,49 @@ export class Arena {
     // Painted hazard lines near the ends
     const hazard = new THREE.MeshStandardMaterial({ color: 0xc8a12a, roughness: 0.9 });
     for (const z of [-1, 1]) {
-      const line = new THREE.Mesh(
-        new THREE.BoxGeometry(this.halfSize * 2 - 4, 0.02, 0.4),
-        hazard,
-      );
+      const line = new THREE.Mesh(new THREE.BoxGeometry(this.halfSize * 2 - 4, 0.02, 0.4), hazard);
       line.position.set(0, 0.01, z * (this.halfSize - 4));
       line.receiveShadow = true;
       this.group.add(line);
     }
 
-    // Skin every collider: invisible AABB proxy + a realistic prop.
-    COLLIDERS.forEach((c, i) => {
-      const w = c.maxX - c.minX;
-      const h = c.maxY - c.minY;
-      const d = c.maxZ - c.minZ;
-      const cx = (c.minX + c.maxX) / 2;
-      const cy = (c.minY + c.maxY) / 2;
-      const cz = (c.minZ + c.maxZ) / 2;
-
+    // Skin every box: invisible AABB proxy + a realistic prop for its kind.
+    let colorIdx = 0;
+    map.boxes.forEach((mb) => {
+      const [cx, cy, cz, w, h, d] = mb.b;
       const proxy = new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
         new THREE.MeshBasicMaterial({ visible: false }),
       );
       proxy.position.set(cx, cy, cz);
       this.group.add(proxy);
-      this.solids.push(proxy); // raycastable (material hidden, object visible)
+      this.solids.push(proxy);
 
-      const prop = this.propFor(i, w, h, d);
+      const prop = this.propFor(mb.kind, w, h, d, colorIdx);
+      if (mb.kind === "container" || mb.kind === "platform") colorIdx++;
       prop.position.set(cx, cy, cz);
       this.group.add(prop);
     });
 
     this.addDecoration();
 
-    // Spawn points (feet) — from the shared list, so client + server agree.
-    for (const [x, y, z] of SPAWNS) this.spawns.push(new THREE.Vector3(x, y, z));
+    for (const [x, y, z] of map.spawns) this.spawns.push(new THREE.Vector3(x, y, z));
   }
 
-  private propFor(i: number, w: number, h: number, d: number): THREE.Object3D {
-    if (i < 4) return this.wall(w, h, d); // perimeter walls
-    if (i >= COLLIDERS.length - 2)
-      return container(w, h, d, CONTAINER_COLORS[i % CONTAINER_COLORS.length]); // platforms
-    switch (i) {
-      case 4:
-      case 5:
-      case 6:
-      case 7:
-        return woodenCrate(w, h, d); // corner cover
-      case 8:
-        return ammoCrate(w, h, d); // central low cover
-      case 9:
-      case 10:
-        return container(w, h, d, CONTAINER_COLORS[i % CONTAINER_COLORS.length]);
+  private propFor(kind: BoxKind, w: number, h: number, d: number, colorIdx: number): THREE.Object3D {
+    switch (kind) {
+      case "wall":
+        return this.wall(w, h, d);
+      case "crate":
+        return woodenCrate(w, h, d);
+      case "ammo":
+        return ammoCrate(w, h, d);
+      case "barrier":
+        return concreteBarrier(w, h, d);
+      case "container":
+      case "platform":
       default:
-        return concreteBarrier(w, h, d); // 11, 12
+        return container(w, h, d, CONTAINER_COLORS[colorIdx % CONTAINER_COLORS.length]);
     }
   }
 
@@ -126,7 +135,6 @@ export class Arena {
     body.castShadow = true;
     body.receiveShadow = true;
     g.add(body);
-    // top cap
     const cap = new THREE.Mesh(
       new THREE.BoxGeometry(w > d ? w : w * 1.02, 0.3, w > d ? d * 1.4 : d),
       trim,
@@ -137,7 +145,6 @@ export class Arena {
   }
 
   private addDecoration(): void {
-    // Barrels — clustered against walls/corners (visual only)
     const barrelSpots: [number, number, number, number][] = [
       [20.5, 0, -20.5, 0xb23b2e],
       [19.6, 0, -21, 0x2e6bb2],
@@ -149,11 +156,9 @@ export class Arena {
     for (const [x, y, z, c] of barrelSpots) {
       const b = barrel(c);
       b.position.set(x, y, z);
-      b.rotation.y = Math.random() * Math.PI;
+      b.rotation.y = (x + z) * 0.3; // deterministic-ish orientation
       this.group.add(b);
     }
-
-    // Crate stacks in the back corners
     for (const [x, z] of [
       [-21, -18],
       [21, 18],
@@ -164,8 +169,6 @@ export class Arena {
       s.rotation.y = (x > 0 ? -1 : 1) * 0.4;
       this.group.add(s);
     }
-
-    // A low sandbag emplacement along one wall
     const bags = sandbagWall(4, 0.9, 0.6);
     bags.position.set(-6, 0.45, 22.2);
     this.group.add(bags);
@@ -174,12 +177,17 @@ export class Arena {
     this.group.add(bags2);
   }
 
-  // Delegate physics to the shared, server-identical implementation.
+  // Delegate physics to the shared, server-identical implementation using this
+  // map's colliders.
   resolveCollision(pos: THREE.Vector3, radius: number): void {
-    sharedResolve(pos, radius);
+    sharedResolve(pos, radius, this.colliders);
   }
 
   groundHeight(x: number, z: number): number {
-    return sharedGround(x, z);
+    return sharedGround(x, z, this.colliders);
+  }
+
+  rayArena(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): number {
+    return sharedRay(ox, oy, oz, dx, dy, dz, this.colliders);
   }
 }

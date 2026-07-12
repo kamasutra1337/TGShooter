@@ -26,7 +26,7 @@ async function main() {
   // 1) boot server
   const server = spawn("npx", ["tsx", "src/index.ts"], {
     cwd: join(__dirname, ".."),
-    env: { ...process.env, PORT: String(PORT), LEADERBOARD_FILE: LB_FILE },
+    env: { ...process.env, PORT: String(PORT), LEADERBOARD_FILE: LB_FILE, MAP_ID: "0" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));

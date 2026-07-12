@@ -1,6 +1,7 @@
 import { Room, type Conn } from "./Room";
 import { SEATS, type Mode, type InputMsg } from "../../shared/protocol";
 import { DEFAULT_WEAPON, type WeaponId } from "../../shared/weapons";
+import { MAPS } from "../../shared/arena";
 import type { EscrowService } from "./ton/EscrowService";
 import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
@@ -140,6 +141,9 @@ export class PrivateRooms {
         for (const m of lobby.members) this.lobbyOf.delete(m.conn.id);
       },
       hostWeapon,
+      process.env.MAP_ID != null && process.env.MAP_ID !== ""
+        ? Number(process.env.MAP_ID)
+        : Math.floor(Math.random() * MAPS.length),
     );
     for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet, m.weapon);
     lobby.game = game;

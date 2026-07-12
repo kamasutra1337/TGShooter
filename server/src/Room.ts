@@ -23,7 +23,7 @@ import {
   type SimInput,
   type SimPlayer,
 } from "../../shared/sim";
-import { spawnFor, rayArena, groundHeight } from "../../shared/arena";
+import { spawnFor, rayArena, groundHeight, mapById, type GameMap } from "../../shared/arena";
 import { weaponOf, type WeaponId } from "../../shared/weapons";
 import { ServerBot } from "./ServerBot";
 import { Address } from "@ton/core";
@@ -98,6 +98,7 @@ export class Room {
   readonly pot: number;
   readonly chainMatchId: bigint; // on-chain escrow match id
   readonly matchWeapon: WeaponId; // everyone in this match uses the same weapon
+  readonly map: GameMap; // the arena everyone plays on
 
   private parts: Part[] = [];
   private tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -120,6 +121,7 @@ export class Room {
     leaderboard: Leaderboard,
     onClose: () => void,
     matchWeapon: WeaponId = "rifle",
+    mapId = 0,
   ) {
     this.id = id;
     this.mode = mode;
@@ -128,6 +130,7 @@ export class Room {
     this.pot = +(stake * this.seats).toFixed(3);
     this.chainMatchId = chainMatchId;
     this.matchWeapon = matchWeapon;
+    this.map = mapById(mapId);
     this.escrow = escrow;
     this.leaderboard = leaderboard;
     this.onClose = onClose;
@@ -161,7 +164,7 @@ export class Room {
     void weapon; // everyone in a match uses the same weapon (fair fights)
     const seat = this.parts.length;
     this.parts.push({
-      player: makePlayer(conn.id, spawnFor(this.mode, seat), this.matchWeapon),
+      player: makePlayer(conn.id, spawnFor(this.map, this.mode, seat), this.matchWeapon),
       name,
       team: this.teamFor(seat),
       wallet,
@@ -181,7 +184,7 @@ export class Room {
     const botNames = ["Raider", "Viper", "Ghost", "Bravo", "Kilo", "Wolf", "Echo", "Fox", "Nova", "Zulu"];
     // Bots use the SAME weapon as the match — no sniper-vs-shotgun mismatches.
     this.parts.push({
-      player: makePlayer("bot-" + seat, spawnFor(this.mode, seat), this.matchWeapon),
+      player: makePlayer("bot-" + seat, spawnFor(this.map, this.mode, seat), this.matchWeapon),
       name: botNames[seat % botNames.length],
       team,
       conn: null,
@@ -214,6 +217,7 @@ export class Room {
         youId: p.player.id,
         pot: this.pot,
         stake: this.stake,
+        mapId: this.map.id,
         players: roster,
       });
     }
@@ -278,12 +282,12 @@ export class Room {
         p.respawnT -= dt;
         if (p.respawnT <= 0) {
           const seat = this.parts.indexOf(p);
-          respawn(p.player, spawnFor(this.mode, seat));
+          respawn(p.player, spawnFor(this.map, this.mode, seat));
           p.nades = NADES_PER_LIFE;
         }
       }
 
-      stepMovement(p.player, p.input, dt);
+      stepMovement(p.player, p.input, dt, this.map.colliders);
       stepWeapon(p.player, p.input, dt);
     }
 
@@ -319,7 +323,7 @@ export class Room {
       let impact: { x: number; y: number; z: number } | null = null;
       for (let i = 0; i < shot.dirs.length; i++) {
         const dir = shot.dirs[i];
-        const hit = hitscan(shot.origin, dir, targets, shooter.player.id, spec);
+        const hit = hitscan(shot.origin, dir, targets, shooter.player.id, spec, this.map.colliders);
         if (i === 0) impact = hit ? hit.point : this.wallEnd(shot.origin, dir);
         if (!hit) continue;
         const acc = perVictim.get(hit.targetId) ?? { dmg: 0, headshot: false };
@@ -402,7 +406,7 @@ export class Room {
       g.y += g.vy * dt;
       g.z += g.vz * dt;
       // floor bounce (lose energy)
-      const floor = groundHeight(g.x, g.z) + 0.15;
+      const floor = groundHeight(g.x, g.z, this.map.colliders) + 0.15;
       if (g.y < floor) {
         g.y = floor;
         g.vy = Math.abs(g.vy) * 0.35;
@@ -432,7 +436,7 @@ export class Room {
       const dy = cy - g.y;
       const dz = cz - g.z;
       const len = Math.hypot(dx, dy, dz) || 1;
-      const wall = rayArena(g.x, g.y, g.z, dx / len, dy / len, dz / len);
+      const wall = rayArena(g.x, g.y, g.z, dx / len, dy / len, dz / len, this.map.colliders);
       if (Number.isFinite(wall) && wall < dist - 0.5) continue; // blocked
       const dmg = NADE_MAX_DMG * (1 - dist / NADE_RADIUS);
       if (dmg <= 0) continue;
@@ -450,7 +454,7 @@ export class Room {
 
   // Endpoint of a ray at the first wall/box it hits (or 60u if it hits nothing).
   private wallEnd(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }) {
-    const wallDist = rayArena(o.x, o.y, o.z, d.x, d.y, d.z);
+    const wallDist = rayArena(o.x, o.y, o.z, d.x, d.y, d.z, this.map.colliders);
     const dist = Number.isFinite(wallDist) ? wallDist : 60;
     return { x: o.x + d.x * dist, y: o.y + d.y * dist, z: o.z + d.z * dist };
   }

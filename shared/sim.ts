@@ -4,6 +4,7 @@ import {
   rayArena,
   HALF_SIZE,
   type Vec3,
+  type AABB,
 } from "./arena";
 import {
   WEAPONS,
@@ -113,7 +114,7 @@ export function respawn(p: SimPlayer, feet: [number, number, number]): void {
   p.reloadT = 0;
 }
 
-export function stepMovement(p: SimPlayer, input: SimInput, dt: number): void {
+export function stepMovement(p: SimPlayer, input: SimInput, dt: number, colliders: AABB[]): void {
   if (!p.alive) return;
   p.yaw = input.yaw;
   p.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, input.pitch));
@@ -168,13 +169,13 @@ export function stepMovement(p: SimPlayer, input: SimInput, dt: number): void {
   p.pos.z += p.vel.z * dt;
   p.pos.y += p.vel.y * dt;
 
-  resolveCollision(p.pos, RADIUS);
+  resolveCollision(p.pos, RADIUS, colliders);
 
   const lim = HALF_SIZE - RADIUS - 0.6;
   p.pos.x = Math.max(-lim, Math.min(lim, p.pos.x));
   p.pos.z = Math.max(-lim, Math.min(lim, p.pos.z));
 
-  const ground = groundHeight(p.pos.x, p.pos.z);
+  const ground = groundHeight(p.pos.x, p.pos.z, colliders);
   const feetTarget = ground + EYE;
   if (p.pos.y <= feetTarget) {
     p.pos.y = feetTarget;
@@ -320,8 +321,9 @@ export function hitscan(
   targets: HitboxState[],
   excludeId: string,
   spec: WeaponSpec,
+  colliders: AABB[],
 ): HitscanResult | null {
-  const wallDist = rayArena(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z);
+  const wallDist = rayArena(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, colliders);
 
   let best: HitscanResult | null = null;
   for (const tgt of targets) {

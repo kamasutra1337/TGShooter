@@ -52,7 +52,7 @@ function fireOnce(p: SimPlayer, target: HitboxState, rand: () => number) {
   let head = false;
   let hits = 0;
   for (const dir of shot.dirs) {
-    const h = hitscan(shot.origin, dir, [target], p.id, spec);
+    const h = hitscan(shot.origin, dir, [target], p.id, spec, []); // no walls: pure ballistics
     if (h) {
       dmg += h.damage;
       head = head || h.headshot;

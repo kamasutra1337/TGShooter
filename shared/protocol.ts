@@ -103,6 +103,7 @@ export interface MatchStartMsg {
   youId: string;
   pot: number;
   stake: number;
+  mapId: number; // which arena to build
   players: { id: string; name: string; bot: boolean; team: number; weapon: WeaponId }[];
 }
 

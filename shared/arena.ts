@@ -1,34 +1,23 @@
-// Single source of truth for the arena geometry. Both the client (builds meshes
-// from this) and the server (uses it for authoritative collision + hitscan) read
-// the SAME box list, so what you see and what the server simulates never drift.
+// Single source of truth for arena geometry. Both the client (builds meshes from
+// this) and the server (authoritative collision + hitscan) read the SAME box
+// lists, so what you see and what the server simulates never drift.
 //
-// Each box is [centerX, centerY, centerZ, width, height, depth]. Pure math only,
-// no THREE — runs identically in the browser and in Node.
+// Multiple maps: each map is a list of typed boxes + spawn points. All maps share
+// the same perimeter + HALF_SIZE; only the interior cover + spawns differ. The
+// server picks a map per match and tells clients its id in MatchStart. Collision
+// functions take a map's colliders so concurrent rooms on different maps are safe.
+//
+// Box = [centerX, centerY, centerZ, width, height, depth]. Pure math only.
 
 export type Box6 = [number, number, number, number, number, number];
+export type BoxKind = "wall" | "crate" | "ammo" | "barrier" | "container" | "platform";
 
 export const HALF_SIZE = 24;
 
-export const BOXES: Box6[] = [
-  // perimeter walls (h=6, t=1, s=24)
-  [0, 3, -24, 48, 6, 1],
-  [0, 3, 24, 48, 6, 1],
-  [-24, 3, 0, 1, 6, 48],
-  [24, 3, 0, 1, 6, 48],
-  // cover crates
-  [-8, 1.1, -8, 3, 2.2, 3],
-  [8, 1.1, 8, 3, 2.2, 3],
-  [8, 1.1, -8, 3, 2.2, 3],
-  [-8, 1.1, 8, 3, 2.2, 3],
-  [0, 0.7, 0, 6, 1.4, 6],
-  [-14, 1.5, 0, 2, 3, 6],
-  [14, 1.5, 0, 2, 3, 6],
-  [-11, 1.5, -15, 4, 3, 2],
-  [11, 1.5, 15, 4, 3, 2],
-  // raised platforms
-  [-16, 1.5, -16, 8, 3, 8],
-  [16, 1.5, 16, 8, 3, 8],
-];
+export interface MapBox {
+  b: Box6;
+  kind: BoxKind;
+}
 
 export interface AABB {
   minX: number;
@@ -39,26 +28,29 @@ export interface AABB {
   maxZ: number;
 }
 
-export const COLLIDERS: AABB[] = BOXES.map(([x, y, z, w, h, d]) => ({
-  minX: x - w / 2,
-  minY: y - h / 2,
-  minZ: z - d / 2,
-  maxX: x + w / 2,
-  maxY: y + h / 2,
-  maxZ: z + d / 2,
-}));
+export interface GameMap {
+  id: number;
+  name: string;
+  boxes: MapBox[];
+  colliders: AABB[]; // derived
+  spawns: [number, number, number][]; // duel
+  teamSpawns: [number, number, number][][]; // [team0[], team1[]]
+}
 
-// Duel spawn points (feet positions; eye = +eyeHeight).
-export const SPAWNS: [number, number, number][] = [
-  [0, 0, 20],
-  [0, 0, -12],
-  [-18, 0, 18],
-  [18, 0, -18],
-  [0, 0, -18],
+function toAABB([x, y, z, w, h, d]: Box6): AABB {
+  return { minX: x - w / 2, minY: y - h / 2, minZ: z - d / 2, maxX: x + w / 2, maxY: y + h / 2, maxZ: z + d / 2 };
+}
+
+// Perimeter walls, shared by every map.
+const WALLS: MapBox[] = [
+  { b: [0, 3, -24, 48, 6, 1], kind: "wall" },
+  { b: [0, 3, 24, 48, 6, 1], kind: "wall" },
+  { b: [-24, 3, 0, 1, 6, 48], kind: "wall" },
+  { b: [24, 3, 0, 1, 6, 48], kind: "wall" },
 ];
 
-// Team battle: team 0 spawns on the +z side, team 1 on the -z side (5 each).
-export const TEAM_SPAWNS: [number, number, number][][] = [
+// Team spawns are always 5 on the +z side (team 0) and 5 on the -z side (team 1).
+const TEAM_ROWS: [number, number, number][][] = [
   [
     [-11, 0, 19],
     [-5.5, 0, 20],
@@ -75,11 +67,116 @@ export const TEAM_SPAWNS: [number, number, number][][] = [
   ],
 ];
 
-// Spawn (feet) for a given mode + seat index. Shared so client and server agree.
-export function spawnFor(mode: string, seat: number): [number, number, number] {
-  if (mode === "duel") return SPAWNS[seat % SPAWNS.length];
+// Duel spawn 0 and 1 face each other down the clear central lane on every map.
+const DUEL_A: [number, number, number] = [0, 0, 20];
+const DUEL_B: [number, number, number] = [0, 0, -20];
+
+function makeMap(
+  id: number,
+  name: string,
+  interior: MapBox[],
+  extraDuel: [number, number, number][] = [],
+): GameMap {
+  const boxes = [...WALLS, ...interior];
+  return {
+    id,
+    name,
+    boxes,
+    colliders: boxes.map((mb) => toAABB(mb.b)),
+    spawns: [DUEL_A, DUEL_B, ...extraDuel],
+    teamSpawns: TEAM_ROWS,
+  };
+}
+
+// --- Map 0: DEPOT — the classic. Corner crates, central low ammo cover, side
+// containers, back platforms. Symmetric. Keeps the original layout.
+const DEPOT = makeMap(
+  0,
+  "Depot",
+  [
+    { b: [-8, 1.1, -8, 3, 2.2, 3], kind: "crate" },
+    { b: [8, 1.1, 8, 3, 2.2, 3], kind: "crate" },
+    { b: [8, 1.1, -8, 3, 2.2, 3], kind: "crate" },
+    { b: [-8, 1.1, 8, 3, 2.2, 3], kind: "crate" },
+    { b: [0, 0.7, 0, 6, 1.4, 6], kind: "ammo" },
+    { b: [-14, 1.5, 0, 2, 3, 6], kind: "container" },
+    { b: [14, 1.5, 0, 2, 3, 6], kind: "container" },
+    { b: [-11, 1.5, -15, 4, 3, 2], kind: "barrier" },
+    { b: [11, 1.5, 15, 4, 3, 2], kind: "barrier" },
+    { b: [-16, 1.5, -16, 8, 3, 8], kind: "platform" },
+    { b: [16, 1.5, 16, 8, 3, 8], kind: "platform" },
+  ],
+  [
+    [-18, 0, 18],
+    [18, 0, -18],
+  ],
+);
+
+// --- Map 1: CROSSFIRE — long side lanes with tall containers, a central plus of
+// low cover. Encourages mid-range duels down the flanks. Symmetric.
+const CROSSFIRE = makeMap(
+  1,
+  "Crossfire",
+  [
+    // long flank walls creating two side lanes
+    { b: [-10, 1.5, 0, 2, 3, 16], kind: "container" },
+    { b: [10, 1.5, 0, 2, 3, 16], kind: "container" },
+    // central plus of low cover
+    { b: [0, 1.1, 0, 5, 2.2, 2], kind: "crate" },
+    { b: [0, 1.1, 0, 2, 2.2, 5], kind: "crate" },
+    // mid-lane bumps
+    { b: [0, 0.7, -11, 6, 1.4, 2], kind: "ammo" },
+    { b: [0, 0.7, 11, 6, 1.4, 2], kind: "ammo" },
+    // corner crates
+    { b: [-17, 1.1, -17, 3, 2.2, 3], kind: "crate" },
+    { b: [17, 1.1, 17, 3, 2.2, 3], kind: "crate" },
+    { b: [17, 1.1, -17, 3, 2.2, 3], kind: "crate" },
+    { b: [-17, 1.1, 17, 3, 2.2, 3], kind: "crate" },
+    // outer flank barriers
+    { b: [-18, 1.5, 0, 3, 3, 5], kind: "barrier" },
+    { b: [18, 1.5, 0, 3, 3, 5], kind: "barrier" },
+  ],
+  [
+    [-20, 0, 20],
+    [20, 0, -20],
+  ],
+);
+
+// --- Map 2: YARD — scattered shipping containers + a central platform. Broken
+// sightlines, more flanking. Symmetric about the origin.
+const YARD = makeMap(
+  2,
+  "Yard",
+  [
+    { b: [0, 1.5, 0, 6, 3, 6], kind: "platform" },
+    { b: [-12, 1.5, -6, 5, 3, 3, ], kind: "container" },
+    { b: [12, 1.5, 6, 5, 3, 3], kind: "container" },
+    { b: [6, 1.5, -13, 3, 3, 6], kind: "container" },
+    { b: [-6, 1.5, 13, 3, 3, 6], kind: "container" },
+    { b: [-18, 1.1, 2, 3, 2.2, 3], kind: "crate" },
+    { b: [18, 1.1, -2, 3, 2.2, 3], kind: "crate" },
+    { b: [0, 1.1, -16, 6, 2.2, 2], kind: "barrier" },
+    { b: [0, 1.1, 16, 6, 2.2, 2], kind: "barrier" },
+    { b: [-9, 0.7, 9, 4, 1.4, 4], kind: "ammo" },
+    { b: [9, 0.7, -9, 4, 1.4, 4], kind: "ammo" },
+  ],
+  [
+    [-19, 0, 17],
+    [19, 0, -17],
+  ],
+);
+
+export const MAPS: GameMap[] = [DEPOT, CROSSFIRE, YARD];
+
+export function mapById(id: number): GameMap {
+  return MAPS[id] ?? MAPS[0];
+}
+
+// Spawn (feet) for a map + mode + seat index. Shared so client and server agree.
+export function spawnFor(map: GameMap, mode: string, seat: number): [number, number, number] {
+  if (mode === "duel") return map.spawns[seat % map.spawns.length];
   const team = seat < 5 ? 0 : 1;
-  return TEAM_SPAWNS[team][seat % 5];
+  return map.teamSpawns[team][seat % 5];
 }
 
 export interface Vec3 {
@@ -89,8 +186,8 @@ export interface Vec3 {
 }
 
 // Horizontal circle-vs-AABB resolution; mutates pos.x/pos.z.
-export function resolveCollision(pos: Vec3, radius: number): void {
-  for (const b of COLLIDERS) {
+export function resolveCollision(pos: Vec3, radius: number, colliders: AABB[]): void {
+  for (const b of colliders) {
     if (pos.y > b.maxY + 0.1 || pos.y < b.minY - 1.5) continue;
     const cx = Math.max(b.minX, Math.min(pos.x, b.maxX));
     const cz = Math.max(b.minZ, Math.min(pos.z, b.maxZ));
@@ -107,9 +204,9 @@ export function resolveCollision(pos: Vec3, radius: number): void {
 }
 
 // Height of the surface under (x,z): top of the tallest low box we stand over.
-export function groundHeight(x: number, z: number): number {
+export function groundHeight(x: number, z: number, colliders: AABB[]): number {
   let h = 0;
-  for (const b of COLLIDERS) {
+  for (const b of colliders) {
     if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) {
       if (b.maxY > h && b.maxY < 4.5) h = b.maxY;
     }
@@ -126,9 +223,10 @@ export function rayArena(
   dx: number,
   dy: number,
   dz: number,
+  colliders: AABB[],
 ): number {
   let best = Infinity;
-  for (const b of COLLIDERS) {
+  for (const b of colliders) {
     const t = raySlab(ox, oy, oz, dx, dy, dz, b);
     if (t >= 0 && t < best) best = t;
   }
