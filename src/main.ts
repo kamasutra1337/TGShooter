@@ -486,7 +486,6 @@ const roomChatInput = document.getElementById("room-chat-input") as HTMLInputEle
 const roomChatSend = document.getElementById("room-chat-send") as HTMLButtonElement;
 const chatInputBar = document.getElementById("chat-input-bar")!;
 const chatInput = document.getElementById("chat-input") as HTMLInputElement;
-const btnChat = document.getElementById("btn-chat") as HTMLButtonElement;
 
 function chatLine(log: HTMLElement, name: string, text: string, cls: string): void {
   const el = document.createElement("div");
@@ -666,10 +665,6 @@ function sendMatchChat(): void {
   if (t) game.sendChat(t);
   closeChat();
 }
-btnChat.addEventListener("click", () => {
-  if (chatInputBar.classList.contains("hidden")) openChat();
-  else closeChat();
-});
 chatInput.addEventListener("keydown", (e) => {
   e.stopPropagation();
   if (e.key === "Enter") {
