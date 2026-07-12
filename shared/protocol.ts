@@ -65,6 +65,13 @@ export interface ChatMsg {
   text: string;
 }
 
+// Client → server: "I've broadcast my deposit transaction." A hint to poll the
+// contract sooner; the server still verifies funding on-chain and never trusts
+// this message to move money.
+export interface DepositedMsg {
+  t: "deposited";
+}
+
 export type ClientMsg =
   | JoinMsg
   | InputMsg
@@ -73,7 +80,8 @@ export type ClientMsg =
   | ReadyMsg
   | StartRoomMsg
   | LeaveRoomMsg
-  | ChatMsg;
+  | ChatMsg
+  | DepositedMsg;
 
 // ---- server → client ----
 export interface WelcomeMsg {
@@ -175,6 +183,31 @@ export interface ChatEventMsg {
   team: number;
 }
 
+// Server → client: a staked match has formed; every player must deposit their
+// stake into the escrow contract for this matchId before the match starts.
+export interface FundMatchMsg {
+  t: "fund";
+  matchId: string; // on-chain uint64 as a decimal string
+  escrow: string; // escrow contract address (friendly form)
+  stake: number; // TON each player must deposit
+  seats: number; // players expected to fund
+  deadlineMs: number; // epoch ms; unfunded seats are cancelled + refunded after
+}
+
+// Server → client: funding progress while we wait for everyone to deposit.
+export interface FundStatusMsg {
+  t: "fundStatus";
+  funded: number; // deposits confirmed on-chain so far
+  seats: number;
+}
+
+// Server → client: funding did not complete (timeout / player dropped); any
+// deposits already made are refunded on-chain by the oracle.
+export interface FundFailedMsg {
+  t: "fundFailed";
+  reason: string;
+}
+
 export type ServerMsg =
   | WelcomeMsg
   | MatchStartMsg
@@ -185,6 +218,9 @@ export type ServerMsg =
   | RoomJoinedMsg
   | RoomStateMsg
   | RoomErrorMsg
-  | ChatEventMsg;
+  | ChatEventMsg
+  | FundMatchMsg
+  | FundStatusMsg
+  | FundFailedMsg;
 
 export const RAKE = 0.05;

@@ -9,12 +9,18 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "gen:copy": "cp ../contracts/build/match_escrow_MatchEscrow.ts src/ton/MatchEscrow.gen.ts",
+    "wallet:gen": "tsx src/ton/genwallet.ts",
+    "escrow:deploy": "tsx src/ton/deploy.ts",
+    "escrow:info": "tsx src/ton/info.ts",
     "test": "tsx test/integration.ts",
     "test:escrow": "tsx test/escrow.ts",
+    "test:funding": "tsx test/funding.ts",
     "test:rooms": "tsx test/rooms.ts"
   },
   "dependencies": {
     "@ton/core": "^0.60.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^14.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

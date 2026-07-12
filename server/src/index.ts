@@ -1,6 +1,9 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "node:http";
 import { Address } from "@ton/core";
+import { TonClient } from "@ton/ton";
+import { loadEnv } from "./ton/env";
+import { FundingCoordinator } from "./Funding";
 import { Matchmaker } from "./Matchmaker";
 import { PrivateRooms } from "./PrivateRooms";
 import { EscrowService } from "./ton/EscrowService";
@@ -8,6 +11,8 @@ import { makeLiveSender } from "./ton/liveSender";
 import { Leaderboard } from "./Leaderboard";
 import type { Conn } from "./Room";
 import type { ClientMsg, ServerMsg } from "../../shared/protocol";
+
+loadEnv(); // merge server/.env (oracle mnemonic, escrow address) before reading
 
 const PORT = Number(process.env.PORT ?? 8090);
 const LEADERBOARD_FILE = process.env.LEADERBOARD_FILE ?? "./data/leaderboard.json";
@@ -19,15 +24,27 @@ const escrowAddr = process.env.ESCROW_ADDRESS
   ? Address.parse(process.env.ESCROW_ADDRESS)
   : null;
 let oracleSender = null;
+let tonClient: TonClient | null = null;
 if (escrowAddr && process.env.TON_ENDPOINT && process.env.ORACLE_MNEMONIC) {
   oracleSender = await makeLiveSender(
     process.env.TON_ENDPOINT,
     process.env.TON_API_KEY,
     process.env.ORACLE_MNEMONIC,
   );
+  tonClient = new TonClient({
+    endpoint: process.env.TON_ENDPOINT,
+    apiKey: process.env.TON_API_KEY,
+  });
 }
-const escrow = new EscrowService(oracleSender, escrowAddr);
+const escrow = new EscrowService(oracleSender, escrowAddr, tonClient);
 console.log(`[escrow] ${escrow.enabled ? "ENABLED" : "disabled (dev)"}`);
+
+// Funding coordinator drives the deposit phase of staked matches. Enabled only
+// when the escrow is live + we have its friendly address to hand to clients.
+const funding =
+  escrow.enabled && escrowAddr
+    ? new FundingCoordinator({ escrow, escrowAddress: process.env.ESCROW_ADDRESS! })
+    : null;
 
 const leaderboard = new Leaderboard(LEADERBOARD_FILE);
 
@@ -53,8 +70,8 @@ const httpServer = createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer });
-const mm = new Matchmaker(escrow, leaderboard);
-const pr = new PrivateRooms(escrow, leaderboard);
+const mm = new Matchmaker(escrow, leaderboard, funding);
+const pr = new PrivateRooms(escrow, leaderboard, funding);
 let nextId = 0;
 
 wss.on("connection", (ws: WebSocket) => {
@@ -100,6 +117,9 @@ wss.on("connection", (ws: WebSocket) => {
     } else if (msg.t === "input") {
       mm.routeInput(id, msg);
       pr.routeInput(id, msg);
+    } else if (msg.t === "deposited") {
+      mm.deposited(id);
+      pr.deposited(id);
     }
   });
 

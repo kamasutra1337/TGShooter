@@ -102,6 +102,33 @@ async function main() {
     process.exit(1);
   }
 
+  // Cancel path: the oracle refunds every depositor (what a funding timeout
+  // triggers). Deposit two players, cancel, and verify both get their stake back.
+  const MID2 = 43n;
+  for (const p of [alice, bob]) {
+    await escrow.send(
+      p.getSender(),
+      { value: toNano("1.1") },
+      { $$type: "Deposit", matchId: MID2, stake: toNano("1"), seats: 2n },
+    );
+  }
+  const aBefore = await alice.getBalance();
+  const bBefore = await bob.getBalance();
+  await svc.cancel(MID2);
+  const aBack = (await alice.getBalance()) - aBefore;
+  const bBack = (await bob.getBalance()) - bBefore;
+  const cancelledOk =
+    (await escrow.getMatchData(MID2))!.settled &&
+    aBack > toNano("0.9") &&
+    bBack > toNano("0.9");
+  console.log(
+    `[escrow-test] cancel refunds: alice+=${Number(aBack) / 1e9} bob+=${Number(bBack) / 1e9} TON (≈1 each)`,
+  );
+  if (!cancelledOk) {
+    console.error("❌ FAIL: cancel did not refund both depositors");
+    process.exit(1);
+  }
+
   // And a non-oracle sender must NOT be able to settle.
   const MID3 = 44n;
   for (const p of [alice, bob]) {

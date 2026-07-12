@@ -1,4 +1,8 @@
 import "./styles.css";
+// @ton/core builds BOC payloads via a global `Buffer`, which browsers lack.
+// Polyfill it before anything TON-related loads.
+import { Buffer } from "buffer";
+if (!globalThis.Buffer) globalThis.Buffer = Buffer;
 import { Game, type Mode } from "./game/Game";
 import { SEATS } from "../shared/protocol";
 import { Telegram } from "./platform/telegram";
@@ -125,20 +129,17 @@ btnWallet.addEventListener("click", async () => {
 });
 
 // PLAY = online, authoritative-server match (the wager path).
+//
+// Money flow (staked): join → server sends `fund` (matchId + escrow) → we sign a
+// deposit with our wallet → server confirms all deposits on-chain → `start`.
+// Free flow (stake = 0): server starts immediately (bots fill empty seats).
 btnPlay.addEventListener("click", async () => {
   const stake = parseFloat(stakeSelect.value);
-  const seats = SEATS[mode];
-  const pot = +(stake * seats).toFixed(3);
 
-  // Wager gate: with a wallet connected, take the stake into escrow (mock).
-  // Without one, a free match is allowed so the game is always demoable —
-  // production would require a funded room before start.
-  if (Ton.getState().connected) {
-    const dep = await Ton.depositStake({ matchId: "online", stake, players: seats, pot });
-    if (!dep.ok) {
-      setNet("Insufficient balance for stake", true);
-      return;
-    }
+  // Staked matches require a connected wallet to deposit from.
+  if (stake > 0 && !Ton.getState().connected) {
+    setNet("Connect your TON wallet to play for a stake (or pick 0 to practice).", true);
+    return;
   }
 
   btnPlay.disabled = true;
@@ -148,17 +149,41 @@ btnPlay.addEventListener("click", async () => {
     await net.connect(SERVER_URL);
   } catch {
     btnPlay.disabled = false;
-    if (Ton.getState().connected) await Ton.refundStake(stake);
     setNet("Can't reach the game server. Start it (server/ → npm run dev) or use Practice.", true);
     return;
   }
 
   setNet(
-    mode === "duel"
-      ? "Matchmaking… (a bot fills in if no opponent)"
-      : "Matchmaking 5v5… (bots fill empty seats)",
+    stake > 0
+      ? "Finding an opponent to stake against…"
+      : mode === "duel"
+        ? "Matchmaking… (a bot fills in if no opponent)"
+        : "Matchmaking 5v5… (bots fill empty seats)",
   );
+
   net.setHandlers({
+    // Staked match formed — deposit our stake into the escrow for this matchId.
+    onFund: async (m) => {
+      setNet(`Match found — deposit ${m.stake} TON in your wallet…`);
+      const dep = await Ton.depositStake(m.matchId, m.escrow, m.stake, m.seats);
+      if (dep.ok) {
+        net.sendDeposited();
+        setNet("Deposit sent — waiting for all players to fund…");
+      } else {
+        setNet(`Deposit failed: ${dep.error ?? "rejected"}`, true);
+        btnPlay.disabled = false;
+        net.close(); // aborts the match; other players are refunded on-chain
+      }
+    },
+    onFundStatus: (m) => {
+      if (!btnPlay.disabled) return; // already bailed
+      setNet(`Deposits confirmed ${m.funded}/${m.seats}…`);
+    },
+    onFundFailed: (m) => {
+      setNet(m.reason || "Funding failed — deposits refunded.", true);
+      btnPlay.disabled = false;
+      net.close();
+    },
     onStart: (start) => {
       btnPlay.disabled = false;
       setNet("");

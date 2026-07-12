@@ -14,7 +14,14 @@ import { Nametags, type Tag } from "./Nametags";
 import { Effects } from "./Effects";
 import { Sound } from "./Audio";
 import { Telegram } from "../platform/telegram";
-import { Ton, type MatchStake } from "../platform/ton";
+// Local match bookkeeping (practice/offline). Online payouts come from the
+// server's MatchEnd + the escrow contract on-chain, not from this.
+interface StakeInfo {
+  matchId: string;
+  stake: number;
+  players: number;
+  pot: number;
+}
 import { NetworkClient } from "../net/NetworkClient";
 import type { MatchStartMsg, HitEventMsg, ShotEventMsg, SnapshotMsg } from "../../shared/protocol";
 import { spawnFor } from "../../shared/arena";
@@ -48,7 +55,7 @@ interface MatchState {
   mode: Mode;
   seats: number;
   pot: number;
-  stake: MatchStake;
+  stake: StakeInfo;
   targetFrags: number; // duel: race to this
   playerFrags: number;
   enemyFrags: number; // duel
@@ -235,7 +242,7 @@ export class Game {
     this.onEnd = onEnd;
     const seats = SEATS[cfg.mode];
     const pot = +(cfg.stake * seats).toFixed(3);
-    const stake: MatchStake = {
+    const stake: StakeInfo = {
       matchId: "local-" + Math.floor(performance.now()),
       stake: cfg.stake,
       players: seats,
@@ -461,12 +468,8 @@ export class Game {
     const m = this.match;
     if (!m) return;
     m.running = false;
-    let payout = 0;
-    if (win && Ton.getState().connected) {
-      payout = await Ton.claimPayout(m.stake);
-    } else if (win) {
-      payout = +(m.pot * 0.95).toFixed(3); // shown even without wallet
-    }
+    // Practice/offline match: cosmetic payout only (no real stake at play).
+    const payout = win ? +(m.pot * 0.95).toFixed(3) : 0;
     this.hud.hide();
     this.onEnd(win, payout);
   }
@@ -757,18 +760,11 @@ export class Game {
     if (!o || !o.running) return;
     o.running = false;
     Telegram.notify(youWon ? "success" : "error");
-    let pay = payout;
-    if (youWon && Ton.getState().connected) {
-      pay = await Ton.claimPayout({
-        matchId: "online",
-        stake: o.stake,
-        players: o.mode === "duel" ? 2 : 5,
-        pot: o.pot,
-      });
-    }
+    // Payout is settled on-chain by the oracle straight to the winner's wallet;
+    // the server's MatchEnd already carries the net amount (pot − rake).
     this.cleanupOnline();
     this.hud.hide();
-    this.onEnd(youWon, pay);
+    this.onEnd(youWon, payout);
   }
 
   private cleanupOnline(): void {

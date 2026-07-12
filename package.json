@@ -10,6 +10,9 @@
     "preview": "vite preview --host"
   },
   "dependencies": {
+    "@ton/core": "^0.60.1",
+    "@tonconnect/ui": "^2.4.4",
+    "buffer": "^6.0.3",
     "three": "^0.169.0"
   },
   "devDependencies": {

@@ -12,6 +12,9 @@ import type {
   RoomStateMsg,
   RoomErrorMsg,
   ChatEventMsg,
+  FundMatchMsg,
+  FundStatusMsg,
+  FundFailedMsg,
 } from "../../shared/protocol";
 
 // Client-side WebSocket transport. Connects, joins a queue, streams input, and
@@ -27,6 +30,9 @@ export interface NetHandlers {
   onRoomState?: (m: RoomStateMsg) => void;
   onRoomError?: (m: RoomErrorMsg) => void;
   onChat?: (m: ChatEventMsg) => void;
+  onFund?: (m: FundMatchMsg) => void;
+  onFundStatus?: (m: FundStatusMsg) => void;
+  onFundFailed?: (m: FundFailedMsg) => void;
   onClose?: () => void;
 }
 
@@ -115,12 +121,25 @@ export class NetworkClient {
       case "chatMsg":
         this.handlers.onChat?.(msg);
         break;
+      case "fund":
+        this.handlers.onFund?.(msg);
+        break;
+      case "fundStatus":
+        this.handlers.onFundStatus?.(msg);
+        break;
+      case "fundFailed":
+        this.handlers.onFundFailed?.(msg);
+        break;
     }
   }
 
   sendChat(text: string): void {
     const t = text.trim().slice(0, 140);
     if (t) this.send({ t: "chat", text: t });
+  }
+
+  sendDeposited(): void {
+    this.send({ t: "deposited" });
   }
 
   join(mode: Mode, stake: number, name: string, wallet?: string): void {

@@ -105,6 +105,19 @@ export class Room {
     return this.parts.length >= this.seats;
   }
 
+  // Human seats and their wallets — used by the funding coordinator to know who
+  // must deposit and to message them while we wait for on-chain confirmation.
+  get humans(): { id: string; conn: Conn; wallet?: string }[] {
+    return this.parts
+      .filter((p) => p.conn)
+      .map((p) => ({ id: p.player.id, conn: p.conn!, wallet: p.wallet }));
+  }
+
+  // Send a message to every connected human (pre-match, before tick loop runs).
+  sendAll(msg: ServerMsg): void {
+    this.broadcast(msg);
+  }
+
   private teamFor(seat: number): number {
     return seat < this.seats / 2 ? 0 : 1;
   }

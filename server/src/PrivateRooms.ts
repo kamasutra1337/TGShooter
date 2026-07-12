@@ -1,6 +1,7 @@
 import { Room, type Conn } from "./Room";
 import { SEATS, type Mode, type InputMsg } from "../../shared/protocol";
 import type { EscrowService } from "./ton/EscrowService";
+import type { FundingCoordinator, FundingSession } from "./Funding";
 import type { Leaderboard } from "./Leaderboard";
 
 // Private rooms for playing with friends: a host creates a lobby (gets a 4-digit
@@ -22,18 +23,31 @@ interface Lobby {
   hostId: string;
   members: Member[];
   game: Room | null;
+  funding: FundingSession | null; // active while collecting deposits
 }
 
 export class PrivateRooms {
   private lobbies = new Map<string, Lobby>(); // code → lobby
   private lobbyOf = new Map<string, Lobby>(); // connId → lobby
-  private chainSeq = 1_000_000n; // offset from matchmaker ids
+  private chainSeq: bigint;
   private escrow: EscrowService;
+  private funding: FundingCoordinator | null;
   private leaderboard: Leaderboard;
 
-  constructor(escrow: EscrowService, leaderboard: Leaderboard) {
+  constructor(
+    escrow: EscrowService,
+    leaderboard: Leaderboard,
+    funding: FundingCoordinator | null = null,
+  ) {
     this.escrow = escrow;
     this.leaderboard = leaderboard;
+    this.funding = funding;
+    // Seed high + off wall-clock so ids never collide with the matchmaker's.
+    this.chainSeq = BigInt(Date.now()) + 1_000_000_000n;
+  }
+
+  private staked(stake: number): boolean {
+    return stake > 0 && this.funding != null && this.escrow.enabled;
   }
 
   create(conn: Conn, mode: Mode, stake: number, name: string, wallet?: string): void {
@@ -45,6 +59,7 @@ export class PrivateRooms {
       hostId: conn.id,
       members: [{ conn, name, wallet, ready: true }],
       game: null,
+      funding: null,
     };
     this.lobbies.set(code, lobby);
     this.lobbyOf.set(conn.id, lobby);
@@ -83,7 +98,24 @@ export class PrivateRooms {
 
   start(id: string): void {
     const lobby = this.lobbyOf.get(id);
-    if (!lobby || lobby.game || lobby.hostId !== id || !this.canStart(lobby)) return;
+    if (!lobby || lobby.game || lobby.funding || lobby.hostId !== id || !this.canStart(lobby)) return;
+
+    const staked = this.staked(lobby.stake);
+    if (staked) {
+      // Real TON on the line → no bots. Everyone must be present + have a wallet.
+      if (lobby.members.length < SEATS[lobby.mode]) {
+        return lobby.members[0]?.conn.send({
+          t: "roomError",
+          reason: `Staked room needs all ${SEATS[lobby.mode]} seats filled by players`,
+        });
+      }
+      if (lobby.members.some((m) => !m.wallet)) {
+        return lobby.members[0]?.conn.send({
+          t: "roomError",
+          reason: "Every player must connect a TON wallet for a staked match",
+        });
+      }
+    }
 
     const game = new Room(
       "priv-" + lobby.code,
@@ -99,13 +131,34 @@ export class PrivateRooms {
     );
     for (const m of lobby.members) game.addHuman(m.conn, m.name, m.wallet);
     lobby.game = game;
-    game.start(); // fills empty seats with bots + sends MatchStart to members
+
+    if (staked && this.funding) {
+      // Collect deposits on-chain, then the session starts the match itself.
+      const session = this.funding.create(game);
+      lobby.funding = session;
+      void session.run().finally(() => {
+        lobby.funding = null;
+      });
+    } else {
+      game.start(); // fills empty seats with bots + sends MatchStart to members
+    }
+  }
+
+  // Client hint that it broadcast its deposit — poll the contract promptly.
+  deposited(id: string): void {
+    this.lobbyOf.get(id)?.funding?.noteDeposit();
   }
 
   leave(id: string): void {
     const lobby = this.lobbyOf.get(id);
     if (!lobby) return;
     this.lobbyOf.delete(id);
+
+    // Leaving mid-funding aborts the match for everyone (all deposits refunded).
+    if (lobby.funding) {
+      lobby.funding.abort("a player left before funding completed");
+      return;
+    }
 
     if (lobby.game) {
       lobby.game.removeHuman(id);
