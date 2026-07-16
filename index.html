@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b0e14" />
+    <link rel="icon" href="./logo.png" />
+    <title>SHOOTon</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script type="module" crossorigin src="./assets/index-BROa5m23.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CxXyFsjs.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <!-- HUD -->
+      <div id="hud" class="hidden">
+        <div id="crosshair" class="style-cross">
+          <span class="ch-arm ch-up"></span>
+          <span class="ch-arm ch-down"></span>
+          <span class="ch-arm ch-left"></span>
+          <span class="ch-arm ch-right"></span>
+          <span class="ch-ring"></span>
+          <span class="ch-center"></span>
+        </div>
+        <div id="hud-top">
+          <div id="score">0</div>
+          <div id="match-timer">0:00</div>
+        </div>
+        <canvas id="minimap" width="140" height="140"></canvas>
+        <div id="dmg-dir"></div>
+        <div id="scoreboard" class="hidden"></div>
+        <div id="team-status" class="hidden">
+          <span id="team-mine">5</span>
+          <span class="ts-vs">vs</span>
+          <span id="team-foe">5</span>
+        </div>
+        <div id="pot-banner" class="hidden"></div>
+        <div id="killfeed"></div>
+        <div id="countdown" class="hidden"></div>
+        <div id="hud-bottom">
+          <div id="health-wrap">
+            <div id="health-icon">✚</div>
+            <div id="health-bar"><div id="health-fill"></div></div>
+            <div id="health-num">100</div>
+          </div>
+          <div id="ammo-wrap">
+            <span id="ammo-mag">30</span><span id="ammo-sep">/</span
+            ><span id="ammo-reserve">90</span>
+            <div id="weapon-name">Assault Rifle</div>
+            <div id="reload-bar" class="hidden"><div id="reload-fill"></div></div>
+          </div>
+        </div>
+        <div id="scope" class="hidden">
+          <div class="scope-ring"></div>
+          <div class="scope-h"></div>
+          <div class="scope-v"></div>
+          <div class="scope-dot"></div>
+        </div>
+        <div id="hitmarker" class="hidden">✕</div>
+        <div id="kill-banner" class="hidden"></div>
+        <div id="lowhp"></div>
+        <div id="damage-flash"></div>
+        <div id="spectate" class="hidden"></div>
+        <div id="chat-feed"></div>
+      </div>
+
+      <!-- Mobile touch controls -->
+      <div id="touch" class="hidden">
+        <div id="move-stick" class="stick"><div class="knob"></div></div>
+        <div id="look-pad"></div>
+        <button id="btn-fire" class="tbtn" aria-label="Fire">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="8" />
+            <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        <button id="btn-jump" class="tbtn" aria-label="Jump">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V6" />
+            <path d="M6 11l6-6 6 6" />
+          </svg>
+        </button>
+        <button id="btn-reload" class="tbtn" aria-label="Reload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+            <path d="M20.5 3.5V9H15" />
+          </svg>
+        </button>
+        <button id="btn-ads" class="tbtn" aria-label="Aim">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="12" cy="12" r="7" />
+            <path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
+            <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        <button id="btn-nade" class="tbtn" aria-label="Grenade">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="14.5" r="6" />
+            <path d="M11 8.5V7M9 7h4M14 7l2.5-2.5" />
+            <circle cx="17.5" cy="4" r="1.4" />
+          </svg>
+        </button>
+        <button id="btn-crouch" class="tbtn" aria-label="Crouch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v11" />
+            <path d="M6 12l6 6 6-6" />
+          </svg>
+        </button>
+        <button id="btn-score" class="tbtn" aria-label="Scoreboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 20V12M12 20V5M19 20V14" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- In-match chat input (shared, toggled) -->
+      <div id="chat-input-bar" class="hidden">
+        <input
+          id="chat-input"
+          maxlength="140"
+          data-i18n-ph="chat.friendsPh"
+          placeholder="Message your friends…"
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- Language picker (first launch; Russian-first) -->
+      <div id="lang-pick" class="hidden">
+        <div class="panel-card lang-card">
+          <div class="lang-mark">🎯</div>
+          <h2 data-i18n="lang.title">Выбери язык</h2>
+          <p class="muted-line" data-i18n="lang.sub">Можно поменять в настройках</p>
+          <div class="lang-opts">
+            <button class="lang-opt" data-lang="ru">🇷🇺 Русский</button>
+            <button class="lang-opt" data-lang="en">🇬🇧 English</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Matchmaking / "finding an opponent" overlay (portal auto-launch) -->
+      <div id="searching" class="hidden">
+        <div class="search-card">
+          <div class="search-spinner"></div>
+          <h2 id="search-title" data-i18n="search.finding">Ищем соперника…</h2>
+          <p id="search-wish" class="muted-line"></p>
+          <button id="search-cancel" class="ghost" data-i18n="search.cancel">Отмена</button>
+        </div>
+      </div>
+
+      <!-- Start / menu overlay -->
+      <div id="menu">
+        <div class="menu-card">
+          <h1>SHOOT<span class="wm-on">on</span></h1>
+          <p class="sub" data-i18n="menu.sub">Web3 wager FPS · TON</p>
+          <div id="rank-row">
+            <div id="rank-badge">Recruit · Lv 1</div>
+            <div id="xp-bar"><div id="xp-fill"></div></div>
+          </div>
+          <div id="mode-row">
+            <button class="mode-chip active" data-mode="duel">
+              <b data-i18n="mode.duel.t">1 vs 1</b>
+              <span data-i18n="mode.duel.d">Duel · stake TON</span>
+            </button>
+            <button class="mode-chip" data-mode="elimination">
+              <b data-i18n="mode.elim.t">5 vs 5</b>
+              <span data-i18n="mode.elim.d">Team battle · last team stands</span>
+            </button>
+          </div>
+          <!-- Proxima: free duels on wishes — no stake, no wallet. -->
+          <div id="loadout">
+            <span class="loadout-label" data-i18n="loadout.label">Loadout</span>
+            <div id="weapon-cards"></div>
+            <div id="weapon-detail"></div>
+          </div>
+          <div id="mapsel">
+            <span class="loadout-label" data-i18n="map.label">Map</span>
+            <div id="map-cards"></div>
+          </div>
+          <button id="btn-play" class="primary">PLAY · ONLINE</button>
+          <button id="btn-practice" class="ghost wide" data-i18n="btn.practice">Practice vs bots (offline)</button>
+          <div id="menu-actions">
+            <button id="btn-create-room" class="ghost" data-i18n="room.createBtn">👥 Create room</button>
+            <button id="btn-join-room" class="ghost" data-i18n="room.joinBtn">Join room</button>
+          </div>
+          <div id="menu-actions">
+            <button id="btn-board" class="ghost" data-i18n="menu.leaderboard">🏆 Leaderboard</button>
+            <button id="btn-settings" class="ghost" data-i18n="menu.settings">⚙ Settings</button>
+          </div>
+          <div id="daily-challenge">
+            <div class="dc-head">
+              <span id="dc-text">Daily challenge</span>
+              <button id="dc-claim" class="ghost hidden" data-i18n="dc.claim">Claim +150</button>
+            </div>
+            <div id="dc-bar"><div id="dc-fill"></div></div>
+          </div>
+          <div id="community">
+            <span class="community-label" data-i18n="community.label">Community</span>
+            <div id="community-row">
+              <button id="btn-tg" class="community-btn" title="Telegram">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3l-3.3 15.6c-.25 1.1-.9 1.37-1.83.85l-5.05-3.72-2.44 2.35c-.27.27-.5.5-1 .5l.36-5.15L18 6.35c.4-.35-.09-.55-.63-.2L6.9 13.1l-4.9-1.53c-1.07-.33-1.09-1.06.22-1.57L20.5 3.05c.88-.33 1.65.2 1.4 1.25z"/></svg>
+                <span data-i18n="community.tg">Telegram</span>
+              </button>
+              <button id="btn-x" class="community-btn" title="X">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.5 8.6L23 22h-6.8l-5.3-7-6.1 7H1.7l8-9.2L1 2h6.9l4.8 6.4L18.9 2zm-1.2 18h1.9L7.1 3.9H5.1L17.7 20z"/></svg>
+                <span data-i18n="community.x">X</span>
+              </button>
+              <button id="btn-share" class="community-btn" title="Invite friends">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
+                <span data-i18n="community.invite">Invite</span>
+              </button>
+            </div>
+          </div>
+          <p class="net-status" id="net-status"></p>
+          <p class="hint" id="controls-hint"></p>
+        </div>
+      </div>
+      <!-- Weekly leaderboard overlay -->
+      <div id="leaderboard" class="hidden">
+        <div class="board-card">
+          <div class="board-head">
+            <h2 data-i18n="board.title">🏆 Weekly Leaderboard</h2>
+            <span id="board-week"></span>
+          </div>
+          <div id="board-body">
+            <p class="board-msg" data-i18n="board.loading">Loading…</p>
+          </div>
+          <button id="btn-board-close" class="primary" data-i18n="board.close">CLOSE</button>
+        </div>
+      </div>
+
+      <!-- Settings overlay -->
+      <div id="settings" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head">
+            <h2 data-i18n="settings.title">⚙ Settings</h2>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.language">Language</span>
+            <div class="seg">
+              <button class="lang-opt-set" data-lang="ru">🇷🇺 RU</button>
+              <button class="lang-opt-set" data-lang="en">🇬🇧 EN</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.crosshair">Crosshair</span>
+            <div class="seg">
+              <button class="ch-style active" data-ch="cross" data-i18n="set.cross">✛ Cross</button>
+              <button class="ch-style" data-ch="circle" data-i18n="set.circle">◎ Circle</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.color">Color</span>
+            <input type="color" id="ch-color" value="#37e0a6" />
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.sound">Sound</span>
+            <div class="seg">
+              <button class="snd-opt" data-snd="on" data-i18n="set.on">On</button>
+              <button class="snd-opt" data-snd="off" data-i18n="set.off">Off</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.graphics">Graphics</span>
+            <div class="seg">
+              <button class="gfx-opt" data-gfx="high" data-i18n="set.high">High</button>
+              <button class="gfx-opt" data-gfx="lite" data-i18n="set.lite">Lite</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.sens">Sensitivity</span>
+            <input type="range" id="set-sens" min="0.4" max="2" step="0.05" value="1" />
+            <span id="set-sens-val" class="set-val">1.0×</span>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.fov">Field of view</span>
+            <input type="range" id="set-fov" min="65" max="100" step="1" value="78" />
+            <span id="set-fov-val" class="set-val">78</span>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.sfx">SFX volume</span>
+            <input type="range" id="set-sfx" min="0" max="1" step="0.05" value="0.5" />
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.music">Music</span>
+            <input type="range" id="set-music" min="0" max="1" step="0.05" value="0.35" />
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.dmgnum">Damage numbers</span>
+            <div class="seg">
+              <button class="dmg-opt" data-dmg="on" data-i18n="set.on">On</button>
+              <button class="dmg-opt" data-dmg="off" data-i18n="set.off">Off</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span data-i18n="set.blood">Blood FX</span>
+            <div class="seg">
+              <button class="blood-opt" data-blood="on" data-i18n="set.on">On</button>
+              <button class="blood-opt" data-blood="off" data-i18n="set.off">Off</button>
+            </div>
+          </div>
+          <div class="swatches" id="ch-swatches"></div>
+          <div class="ch-preview">
+            <div id="ch-preview-box">
+              <div id="crosshair-preview" class="style-cross">
+                <span class="ch-arm ch-up"></span>
+                <span class="ch-arm ch-down"></span>
+                <span class="ch-arm ch-left"></span>
+                <span class="ch-arm ch-right"></span>
+                <span class="ch-ring"></span>
+                <span class="ch-center"></span>
+              </div>
+            </div>
+          </div>
+          <button id="btn-settings-close" class="primary" data-i18n="set.done">DONE</button>
+        </div>
+      </div>
+
+      <!-- Join by code overlay -->
+      <div id="join-code" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head"><h2 data-i18n="join.title">Join Room</h2></div>
+          <p class="muted-line" data-i18n="join.prompt">Enter the 4-digit code from your friend</p>
+          <input
+            id="join-code-input"
+            inputmode="numeric"
+            maxlength="4"
+            placeholder="0000"
+            autocomplete="off"
+          />
+          <div id="menu-actions">
+            <button id="btn-join-cancel" class="ghost" data-i18n="join.cancel">Cancel</button>
+            <button id="btn-join-confirm" class="primary" data-i18n="join.confirm">Join</button>
+          </div>
+          <p id="join-error" class="net-status err"></p>
+        </div>
+      </div>
+
+      <!-- Private room lobby -->
+      <div id="room" class="hidden">
+        <div class="panel-card">
+          <div class="panel-head">
+            <h2 data-i18n="room.title">Private Room</h2>
+            <span id="room-code" class="room-code"></span>
+          </div>
+          <p id="room-sub" class="muted-line"></p>
+          <div id="room-players"></div>
+          <div id="room-chat">
+            <div id="room-chat-log"></div>
+            <div class="chat-input-row">
+              <input
+                id="room-chat-input"
+                maxlength="140"
+                data-i18n-ph="room.msgPh"
+                placeholder="Message…"
+                autocomplete="off"
+              />
+              <button id="room-chat-send" class="ghost" data-i18n="room.send">Send</button>
+            </div>
+          </div>
+          <button id="btn-room-start" class="primary hidden" data-i18n="room.start">START MATCH</button>
+          <button id="btn-room-ready" class="ghost wide" data-i18n="room.ready">I'm ready</button>
+          <button id="btn-room-leave" class="ghost wide" data-i18n="room.leave">Leave room</button>
+          <p id="room-error" class="net-status err"></p>
+        </div>
+      </div>
+
+      <!-- Result overlay -->
+      <div id="result" class="hidden">
+        <div class="result-card">
+          <h2 id="result-title">VICTORY</h2>
+          <div class="payout" id="result-payout"></div>
+          <div id="result-mvp" class="hidden"></div>
+          <div id="result-stats"></div>
+          <div id="result-xp"></div>
+          <button id="btn-again" class="primary" data-i18n="result.again">RETURN TO LOBBY</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
